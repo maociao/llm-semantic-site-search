@@ -29,14 +29,14 @@ def submit(url, query, model_name):
             url = url.split("/")[2]
 
         # load our model
-        if model_name in "gpt-3.5-turbo-0613":
+        if model_name in "gpt-3.5-turbo-16k":
             # check if OPENAI_API_KEY is set
             api_key = os.getenv("OPENAI_API_KEY")
             if api_key == "":
                 st.error("Error: environment variable OPENAI_API_KEY is not set")
                 return()
             model_type = "openai"
-            embedding = OpenAIEmbeddings(openai_api_key=api_key)
+            embedding = OpenAIEmbeddings(openai_api_key=api_key, model="text-embedding-ada-002")
         elif model_name in "ggml-alpaca-7b-q4":
             curdir = os.path.curdir
             model_path = os.path.join(curdir, "models", model_name + ".bin")
@@ -124,28 +124,32 @@ def submit(url, query, model_name):
         load_status.empty()
         
         if model_type != "none":
+            limits = sys.getrecursionlimit()
+            print(f"Recursion limit is set to {limits}")
+            sys.setrecursionlimit(3000)
+
             # Check for and create Vector Store 
-            store_name = url
-            if os.path.exists(f"{store_name}.vdb"):
-                with open(f"{store_name}.vdb", "rb") as f:
-                    vector_store = pickle.load(f)
+            store_name = f"{url}.vdb"
+            if os.path.exists(store_name):
+                vector_store = FAISS.load_local(store_name, embeddings=embedding)
             else:
-                with st.spinner(f"Creating Vector Store..."):
+                vector_load = st.spinner(f"Updating Vector Store...")
+                with vector_load:
                     print(f"texts: {texts} {len(texts)} and metadatas: {metadatas} {len(metadatas)}")
                     print(f"embedding: {embedding}")
-                    vector_store = FAISS.from_texts(texts, embedding=embedding, metadatas=metadatas)
-                    with open(f"{store_name}.vdb", "wb") as f:
-                        pickle.dump(vector_store, f)
-                st.success(f"Created Vector Store {store_name}.vdb")
+                    vector_store = FAISS.from_texts(texts, embedding=embedding)
+                    vector_store.save_local(store_name)
 
     if query:
         #Accept User Queries
-        docs = vector_store.similarity_search(query=query)
+        print(f"query: {query}")
+        docs = vector_store.similarity_search(query=query, k=5)
 
+        print(f"docs: {docs}")
         st.header("Search Results")
         for doc in docs:
-            st.write(f"**{doc.metadata['source']}**")
-            st.write(doc.text)
+            print(f"doc: {doc}")
+            #st.write(f"**{doc.metadata['source']}**")
             st.write("---")
             #Generate Responses Using LLM
             llm = ChatOpenAI(openai_api_key=api_key, temperature=0.9, verbose=True, model=model_name)
@@ -153,17 +157,19 @@ def submit(url, query, model_name):
 
             #Callback and Query Information
             with get_openai_callback() as cb:
-                response = chain.run(input_documents=docs, question=query)
-                st.write("AI Response")
-                st.write(response)
-                st.info(f'''
-                    #### Query Information
-                    Successful Requests: {cb.successful_requests}\n
-                    Total Cost (USD): {cb.total_cost}\n
-                    Tokens Used: {cb.total_tokens}\n
-                    - Prompt Tokens: {cb.prompt_tokens}\n
-                    - Completion Tokens: {cb.completion_tokens}\n 
-                ''')
+                quiestion = "In two sentences or less, describe how the document relates to the following query: " + query
+                response = chain.run(input_documents=docs, question=quiestion)
+                with st.expander("AI Summary"):
+                    st.write(response)
+                with st.sidebar:
+                    st.info(f'''
+                        #### Query Information
+                        Successful Requests: {cb.successful_requests}\n
+                        Total Cost (USD): {cb.total_cost}\n
+                        Tokens Used: {cb.total_tokens}\n
+                        - Prompt Tokens: {cb.prompt_tokens}\n
+                        - Completion Tokens: {cb.completion_tokens}\n 
+                    ''')
 
 def main():
     st.header("LLM Semantic Site Search")
@@ -171,7 +177,7 @@ def main():
     form = st.form(key='my_form')
     model_name = form.selectbox(
         "Select a model",
-        ("model","gpt-3.5-turbo-0613",'ggml-alpaca-7b-q4'),
+        ("model","gpt-3.5-turbo-16k",'ggml-alpaca-7b-q4'),
         key="my_model"
     )
     url = form.text_input("Enter the url of the site to search",
