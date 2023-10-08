@@ -1,6 +1,6 @@
 # LLM Semantic Site Search
 
-This app is an LLM powered chat bot that crawls a website's sitemap and answers semantic search queries about the site.
+This app is an LLM powered search engine that crawls a website's sitemap and performs a semantic search on the site, returning top results with an AI description of the relevancy of the link to your query.
 
 ### Instructions
 
