@@ -82,7 +82,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             load_status = st.progress(0, text=f"Loading sitemap")
 
             # limit our results to top 10 <-- DEBUG CODE
-            num_links = 10
+            num_links = 100
 
             for i, link in enumerate(links):
                 link = link.string
@@ -126,7 +126,6 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                 # Check for and create Vector Store 
                 vector_load = st.spinner(f"Updating Vector Store...")
                 with vector_load:
-                    print(f"docs: {docs} {len(docs)}")
                     vector_store = FAISS.from_documents(docs, embedding=embedding) # metadatas=metadatas, ids=ids
                     try:
                         vector_store.save_local(store_name)
@@ -143,7 +142,6 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
 
     if query and model_name != "model":
         #Accept User Queries
-        print(f"query: {query}")
         docs_with_scores = vector_store.similarity_search_with_score(query=query, k=5)
         docs = []
         for doc, score in docs_with_scores:
