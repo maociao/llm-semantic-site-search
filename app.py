@@ -15,8 +15,7 @@ with st.sidebar:
     st.title("LLM Semantic Site Search")
     st.markdown('''
     ## About
-    This app is an LLM powered chat bot that crawls a website's sitemap and answers semantic search queries about the site.
-    Depending on the size of the site, this could take a while if it is the first time this site was catalogued.
+    This app is an LLM powered search engine that crawls a website's sitemap and performs a semantic search on the site, returning top results with an AI description of the relevancy of the link to your query.
     - [View the source code](https://github.com/maociao/llm-semantic-site-search)
     ''')
 
@@ -82,7 +81,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             load_status = st.progress(0, text=f"Loading sitemap")
 
             # limit our results to top 10 <-- DEBUG CODE
-            num_links = 100
+            num_links = 5
 
             for i, link in enumerate(links):
                 link = link.string
@@ -154,28 +153,45 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                 return()
 
 
+    # Run user query. check on model is to keep streamlit from running query without a model
     if query and model_name != "model":
-        #Accept User Queries
+
+        # search vector store for documents similar to user query, return to 5 results
         docs_with_scores = vector_store.similarity_search_with_score(query=query, k=5)
-        docs = []
-        for doc, score in docs_with_scores:
+        sorted_docs_with_scores = sorted(docs_with_scores, key=lambda x: x[1], reverse=True)
+
+        seen_sources = set()
+        unique_docs_with_scores = []
+
+        # filter results by scores and remove duplicate sources
+        for document_tuple in sorted_docs_with_scores:
+            document = document_tuple[0]
+            score = document_tuple[1]
+            source = document.metadata['source']
+
             if score < 0.2:
                 continue
-            else:
-                docs.extend(doc)
-        
-        if len(docs) == 0:
+            
+            if source not in seen_sources:
+                # If the source is not in seen_sources, add it to seen_sources and keep the document_tuple
+                seen_sources.add(source)
+                unique_docs_with_scores.append(document_tuple)
+
+        # if there are no results
+        if len(unique_docs_with_scores) == 0:
             st.write(f"There were no documents matching your query: {query}")
             return()
 
+        # display results
         st.header("Search Results")
-        for document_tuple in docs_with_scores:
+        for document_tuple in unique_docs_with_scores:
             document = document_tuple[0]
+            score = document_tuple[1]
             doc = [document]
             source = doc[0].metadata['source']
             title = doc[0].metadata['title']
             st.write(f"{title}")
-            st.write(f"**{source}**")
+            st.write(f"**{source}** Score: {score}")
             #Generate Responses Using LLM
             llm = ChatOpenAI(openai_api_key=api_key, temperature=0.9, verbose=True, model=model_name)
             chain = load_qa_chain(llm=llm, chain_type="stuff")

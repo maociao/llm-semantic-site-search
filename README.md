@@ -1,5 +1,9 @@
 # LLM Semantic Site Search
 
+This project was taken on a weekend to learn about langchain and semantic search and how to build a search engine using streamlit.  
+
+I used the https://github.com/sychhq/sych-blog-llm-qa-app.git as a template for this project.
+
 This app is an LLM powered search engine that crawls a website's sitemap and performs a semantic search on the site, returning top results with an AI description of the relevancy of the link to your query.
 
 ### Instructions
