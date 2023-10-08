@@ -21,7 +21,7 @@ with st.sidebar:
     ''')
 
 def submit(url=str, query=str, model_name=str, overwrite=bool):
-    run(url,query, model_name, overwrite)
+    run(url, query, model_name, overwrite)
 
 def run(url=str, query=str, model_name=str, overwrite=bool):    
     if url:
@@ -140,7 +140,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                     print(f"metadatas: {metadatas} {len(metadatas)}")
                     print(f"ids: {ids} {len(ids)}")
                     print(f"embedding: {embedding}")
-                    vector_store = FAISS.from_texts(texts, embedding=embedding, metadatas=metadatas, ids=ids)
+                    vector_store = FAISS.from_texts(texts, embedding=embedding) # metadatas=metadatas, ids=ids
                     try:
                         vector_store.save_local(store_name)
                     except RecursionError as e:
@@ -154,10 +154,15 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                 return()
 
 
-    if query:
+    if query and model_name != "model":
         #Accept User Queries
         print(f"query: {query}")
-        docs = vector_store.similarity_search(query=query, k=5)
+        docs_with_scores = vector_store.similarity_search_with_score(query=query, k=5)
+        docs = [doc for doc, score in docs_with_scores]
+        for doc, score in docs_with_scores:
+            if score < 0.6:
+                st.write(f"There were no documents matching your query: {query}")
+                return()
 
         print(f"docs: {docs}")
         st.header("Search Results")
