@@ -1,7 +1,6 @@
 import streamlit as st
-import pickle
+import uuid
 import os
-import sys
 import requests
 from bs4 import BeautifulSoup as bs
 from PyPDF2 import PdfReader
@@ -16,13 +15,15 @@ with st.sidebar:
     st.title("LLM Semantic Site Search")
     st.markdown('''
     ## About
-    This app is an LLM powered chat bot that takes a website URL and answers semantic search queries about the site.
+    This app is an LLM powered chat bot that crawls a website's sitemap and answers semantic search queries about the site.
     Depending on the size of the site, this could take a while if it is the first time this site was catalogued.
-    - [View the source code](https://github.com/maociao/website-llm-semantic-search)
+    - [View the source code](https://github.com/maociao/llm-semantic-site-search)
     ''')
 
-def submit(url, query, model_name):
+def submit(url=str, query=str, model_name=str, overwrite=bool):
+    run(url,query, model_name, overwrite)
 
+def run(url=str, query=str, model_name=str, overwrite=bool):    
     if url:
         # check if url is domain only if not then split the url into domain and path
         if "/" in url:
@@ -37,15 +38,15 @@ def submit(url, query, model_name):
                 return()
             model_type = "openai"
             embedding = OpenAIEmbeddings(openai_api_key=api_key, model="text-embedding-ada-002")
-        elif model_name in "ggml-alpaca-7b-q4":
+        elif model_name in ["ggml-alpaca-7b-q4", "mistral-7B-v0.1"]:
             curdir = os.path.curdir
             model_path = os.path.join(curdir, "models", model_name + ".bin")
             # check if model_path exists
             if not os.path.exists(model_path):
-                st.error(f"Error: model {model_name} does not exist")
+                st.error(f"Error: {model_name} model does not exist")
                 return()
             model_type = "local"
-            embedding = FAISS(model_path)
+            embedding = LlamaCppEmbeddings(model_path)
         else:
             model_type = "none"
             return()
@@ -65,6 +66,7 @@ def submit(url, query, model_name):
 
         metadatas = []
         texts = []
+        ids = []
 
         # loop through all urls in sitemap_xml
         link_list = bs(sitemap_xml, "xml")
@@ -75,70 +77,82 @@ def submit(url, query, model_name):
             st.error(f"Error: no links found in {sitemap_url}")
             return()
 
-        # limit our results to top 10 <-- DEBUG CODE
-        num_links = 10
-
-        load_status = st.progress(0, text=f"Loading sitemap")
-
-        for i, link in enumerate(links):
-            link = link.string
-
-            load_status.progress(i/num_links, text=f"Loading {link}")
+        store_name = f"{url}.vdb"
+        # check for vdb overwrite
+        if not os.path.exists(store_name) or overwrite:
+            # load site pages
+            load_status = st.progress(0, text=f"Loading sitemap")
 
             # limit our results to top 10 <-- DEBUG CODE
-            if i == num_links:
-                break
-            
-            print(f"Loading {link}")
-            response = requests.get(link)
-            content = response.text
-            # check content-type and select appropriate loader
-            content_type = response.headers.get('content-type')
-            if 'application/pdf' in content_type:
-                parser = 'pdf' 
-            elif 'text/html' in content_type:
-                parser = 'html'
-            else:
-                st.error('Unhandled content type: {}'.format(content_type))
+            num_links = 3
 
-            metadata = {'source': link, 'content_type': content_type}
-            metadatas.append(metadata)
+            for i, link in enumerate(links):
+                link = link.string
 
-            # load html content
-            if parser == "html":
-                page = bs(content, "html.parser")
-                text = ""
-                for string in page.stripped_strings:
-                    text += string
-                texts.append(text)
+                load_status.progress(i/num_links, text=f"Loading {link}")
 
-            # Pdf Text Extraction
-            if parser == "pdf":
-                pdf_reader = PdfReader(content)
-                text = ""
-                for page in pdf_reader.pages:
-                    text += page.extract_text()
+                # limit our results to top 10 <-- DEBUG CODE
+                if i == num_links:
+                    break
+                
+                # get page
+                response = requests.get(link)
+                content = response.text
+
+                # check content-type and select appropriate loader
+                content_type = response.headers.get('content-type')
+                if 'application/pdf' in content_type:
+                    parser = 'pdf' 
+                elif 'text/html' in content_type:
+                    parser = 'html'
+                else:
+                    st.error('Unhandled content type: {}'.format(content_type))
+
+                metadata = {'source': link}
+                metadatas.append(metadata)
+                id = str(uuid.uuid4())
+                ids.append(id)
+
+                # load html content
+                if parser == "html":
+                    page = bs(content, "html.parser")
+                    text = ""
+                    for string in page.stripped_strings:
+                        text += string
                     texts.append(text)
-                    metadatas.append(metadata)
 
-        load_status.empty()
-        
-        if model_type != "none":
-            limits = sys.getrecursionlimit()
-            print(f"Recursion limit is set to {limits}")
-            sys.setrecursionlimit(3000)
+                # Pdf Text Extraction
+                if parser == "pdf":
+                    pdf_reader = PdfReader(content)
+                    text = ""
+                    for page in pdf_reader.pages:
+                        text += page.extract_text()
+                        texts.append(text)
+                        metadatas.append(metadata)
 
-            # Check for and create Vector Store 
-            store_name = f"{url}.vdb"
-            if os.path.exists(store_name):
-                vector_store = FAISS.load_local(store_name, embeddings=embedding)
-            else:
+            load_status.empty()
+            
+            if model_type != "none":
+                # Check for and create Vector Store 
                 vector_load = st.spinner(f"Updating Vector Store...")
                 with vector_load:
-                    print(f"texts: {texts} {len(texts)} and metadatas: {metadatas} {len(metadatas)}")
+                    print(f"texts: {texts} {len(texts)}")
+                    print(f"metadatas: {metadatas} {len(metadatas)}")
+                    print(f"ids: {ids} {len(ids)}")
                     print(f"embedding: {embedding}")
-                    vector_store = FAISS.from_texts(texts, embedding=embedding)
-                    vector_store.save_local(store_name)
+                    vector_store = FAISS.from_texts(texts, embedding=embedding, metadatas=metadatas, ids=ids)
+                    try:
+                        vector_store.save_local(store_name)
+                    except RecursionError as e:
+                        st.error(f"RecusionError trying to save vector store: {e}")
+                        return()
+        else:
+            try:
+                vector_store = FAISS.load_local(store_name, embeddings=embedding)
+            except EOFError as e:
+                st.error(f"An error occured reading the vector store: {e}")
+                return()
+
 
     if query:
         #Accept User Queries
@@ -159,7 +173,7 @@ def submit(url, query, model_name):
             with get_openai_callback() as cb:
                 quiestion = "In two sentences or less, describe how the document relates to the following query: " + query
                 response = chain.run(input_documents=docs, question=quiestion)
-                with st.expander("AI Summary"):
+                with st.expander("Document summary"):
                     st.write(response)
                 with st.sidebar:
                     st.info(f'''
@@ -175,21 +189,16 @@ def main():
     st.header("LLM Semantic Site Search")
 
     form = st.form(key='my_form')
-    model_name = form.selectbox(
-        "Select a model",
-        ("model","gpt-3.5-turbo-16k",'ggml-alpaca-7b-q4'),
-        key="my_model"
+    model_name = form.selectbox("Select a model",
+        ("model","gpt-3.5-turbo-16k",'ggml-alpaca-7b-q4','mistral-7B-v0.1'),
+        index=0
     )
-    url = form.text_input("Enter the url of the site to search",
-            value="https://yoursite.com",
-            key="my_url"
+    url = form.text_input("Enter the url of the site to search")
+    overwrite = form.checkbox("Overwrite")
+    query = form.text_area("Ask something about the site",
+                placeholder="Can you give me a short summary?"
     )
-    query = form.text_area(
-                "Ask something about the site",
-                placeholder="Can you give me a short summary?",
-                key="my_query"
-    )
-    form.form_submit_button("Run", on_click=lambda: submit(url=url, query=query, model_name=model_name))
+    form.form_submit_button("Run", on_click=submit(url=url, query=query, model_name=model_name, overwrite=overwrite))
 
 if __name__ == '__main__':
     main()
