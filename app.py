@@ -1,15 +1,15 @@
 import streamlit as st
-import uuid
 import os
 import requests
 from bs4 import BeautifulSoup as bs
-from PyPDF2 import PdfReader
 from langchain.embeddings import LlamaCppEmbeddings
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chat_models import ChatOpenAI
 from langchain.chains.question_answering import load_qa_chain
 from langchain.callbacks import get_openai_callback
+from langchain.document_loaders import PyPDFLoader, WebBaseLoader
+from langchain.document_transformers import Html2TextTransformer
 
 with st.sidebar:
     st.title("LLM Semantic Site Search")
@@ -64,9 +64,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
         
         sitemap_xml = response.text
 
-        metadatas = []
-        texts = []
-        ids = []
+        docs = []
 
         # loop through all urls in sitemap_xml
         link_list = bs(sitemap_xml, "xml")
@@ -84,7 +82,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             load_status = st.progress(0, text=f"Loading sitemap")
 
             # limit our results to top 10 <-- DEBUG CODE
-            num_links = 3
+            num_links = 10
 
             for i, link in enumerate(links):
                 link = link.string
@@ -97,38 +95,30 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                 
                 # get page
                 response = requests.get(link)
-                content = response.text
 
-                # check content-type and select appropriate loader
+                header_template = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.5",
+                    "Cache-Control": "no-cache"
+                }
+
+                # check content-type and select appropriate document loader
                 content_type = response.headers.get('content-type')
                 if 'application/pdf' in content_type:
-                    parser = 'pdf' 
+                    loader = PyPDFLoader(link) 
+                    docs.extend(loader.load_and_split())
                 elif 'text/html' in content_type:
-                    parser = 'html'
+                    loader = WebBaseLoader(link,
+                                verify_ssl=False,
+                                header_template=header_template
+                    )
+                    html2text = Html2TextTransformer()
+                    doc = loader.load_and_split()
+                    docs.extend(html2text.transform_documents(doc))
                 else:
-                    st.error('Unhandled content type: {}'.format(content_type))
-
-                metadata = {'source': link}
-                metadatas.append(metadata)
-                id = str(uuid.uuid4())
-                ids.append(id)
-
-                # load html content
-                if parser == "html":
-                    page = bs(content, "html.parser")
-                    text = ""
-                    for string in page.stripped_strings:
-                        text += string
-                    texts.append(text)
-
-                # Pdf Text Extraction
-                if parser == "pdf":
-                    pdf_reader = PdfReader(content)
-                    text = ""
-                    for page in pdf_reader.pages:
-                        text += page.extract_text()
-                        texts.append(text)
-                        metadatas.append(metadata)
+                    st.error('Unhandled content type skipped: {}'.format(content_type))
+                    continue
 
             load_status.empty()
             
@@ -136,11 +126,8 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                 # Check for and create Vector Store 
                 vector_load = st.spinner(f"Updating Vector Store...")
                 with vector_load:
-                    print(f"texts: {texts} {len(texts)}")
-                    print(f"metadatas: {metadatas} {len(metadatas)}")
-                    print(f"ids: {ids} {len(ids)}")
-                    print(f"embedding: {embedding}")
-                    vector_store = FAISS.from_texts(texts, embedding=embedding) # metadatas=metadatas, ids=ids
+                    print(f"docs: {docs} {len(docs)}")
+                    vector_store = FAISS.from_documents(docs, embedding=embedding) # metadatas=metadatas, ids=ids
                     try:
                         vector_store.save_local(store_name)
                     except RecursionError as e:
@@ -158,28 +145,36 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
         #Accept User Queries
         print(f"query: {query}")
         docs_with_scores = vector_store.similarity_search_with_score(query=query, k=5)
-        docs = [doc for doc, score in docs_with_scores]
+        docs = []
         for doc, score in docs_with_scores:
-            if score < 0.6:
-                st.write(f"There were no documents matching your query: {query}")
-                return()
+            if score < 0.2:
+                continue
+            else:
+                docs.extend(doc)
+        
+        if len(docs) == 0:
+            st.write(f"There were no documents matching your query: {query}")
+            return()
 
-        print(f"docs: {docs}")
         st.header("Search Results")
-        for doc in docs:
-            print(f"doc: {doc}")
-            #st.write(f"**{doc.metadata['source']}**")
-            st.write("---")
+        for document_tuple in docs_with_scores:
+            document = document_tuple[0]
+            doc = [document]
+            source = doc[0].metadata['source']
+            title = doc[0].metadata['title']
+            st.write(f"{title}")
+            st.write(f"**{source}**")
             #Generate Responses Using LLM
             llm = ChatOpenAI(openai_api_key=api_key, temperature=0.9, verbose=True, model=model_name)
             chain = load_qa_chain(llm=llm, chain_type="stuff")
 
             #Callback and Query Information
             with get_openai_callback() as cb:
-                quiestion = "In two sentences or less, describe how the document relates to the following query: " + query
-                response = chain.run(input_documents=docs, question=quiestion)
+                quiestion = "In two sentences or less, summarize how the document relates to the following query: " + query
+                response = chain.run(input_documents=doc, question=quiestion)
                 with st.expander("Document summary"):
                     st.write(response)
+                st.write("---")
                 with st.sidebar:
                     st.info(f'''
                         #### Query Information
