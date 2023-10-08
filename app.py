@@ -94,7 +94,21 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                     break
                 
                 # get page
-                response = requests.get(link)
+                try:
+                    response = requests.get(link)
+                    response.raise_for_status()  # This will raise an HTTPError for bad responses (4xx and 5xx)
+                except requests.exceptions.SSLError as e:
+                    st.error(f"skipping {link} due to SSL error: {e}")
+                    continue
+                except requests.exceptions.Timeout as e:
+                    st.error(f"skipping {link} due to Timeout error: {e}")
+                    continue
+                except requests.exceptions.TooManyRedirects as e:
+                    st.error(f"skipping {link} due to Too many redirects: {e}")
+                    continue
+                except requests.exceptions.RequestException as e:
+                    st.error(f"skipping {link} due to Request failed: {e}")
+                    continue
 
                 header_template = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134",
