@@ -80,7 +80,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             # load site pages
             load_status = st.progress(0, text=f"Loading sitemap")
 
-            # limit our results to top 10 <-- DEBUG CODE
+            # limit our results for debugging <-- DEBUG CODE
             num_links = 5
 
             for i, link in enumerate(links):
@@ -88,9 +88,9 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
 
                 load_status.progress(i/num_links, text=f"Loading {link}")
 
-                # limit our results to top 10 <-- DEBUG CODE
+                # limit our results for debugging <-- DEBUG CODE
                 if i == num_links:
-                    break
+                   break
                 
                 # get page
                 try:
@@ -157,9 +157,11 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
     if query and model_name != "model":
 
         # search vector store for documents similar to user query, return to 5 results
-        docs_with_scores = vector_store.similarity_search_with_score(query=query, k=5)
+        kwargs = {'score_threshold': 0.6}
+        docs_with_scores = vector_store.similarity_search_with_relevance_scores(query=query, k=20, **kwargs)
         sorted_docs_with_scores = sorted(docs_with_scores, key=lambda x: x[1], reverse=True)
 
+        documents = []
         seen_sources = set()
         unique_docs_with_scores = []
 
@@ -171,19 +173,32 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
 
             if score < 0.2:
                 continue
-            
+
             if source not in seen_sources:
                 # If the source is not in seen_sources, add it to seen_sources and keep the document_tuple
                 seen_sources.add(source)
                 unique_docs_with_scores.append(document_tuple)
+            
+            # capture docs for query_response
+            documents.append(document_tuple[0])
 
         # if there are no results
         if len(unique_docs_with_scores) == 0:
             st.write(f"There were no documents matching your query: {query}")
             return()
 
+        # Setup llm chain
+        llm = ChatOpenAI(openai_api_key=api_key, temperature=0.9, verbose=True, model=model_name)
+        chain = load_qa_chain(llm=llm, chain_type="stuff")
+
+        # Get query response based on all matches
+        query_response = chain.run(input_documents=documents, question=query)
+        with st.expander("**Answer:**"):
+            st.write(query_response)
+        st.write("---")
+
         # display results
-        st.header("Search Results")
+        st.header("Related Search Results")
         for document_tuple in unique_docs_with_scores:
             document = document_tuple[0]
             score = document_tuple[1]
@@ -192,9 +207,6 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             title = doc[0].metadata['title']
             st.write(f"{title}")
             st.write(f"**{source}** Score: {score}")
-            #Generate Responses Using LLM
-            llm = ChatOpenAI(openai_api_key=api_key, temperature=0.9, verbose=True, model=model_name)
-            chain = load_qa_chain(llm=llm, chain_type="stuff")
 
             #Callback and Query Information
             with get_openai_callback() as cb:
@@ -222,7 +234,7 @@ def main():
         index=0
     )
     url = form.text_input("Enter the url of the site to search")
-    overwrite = form.checkbox("Overwrite")
+    overwrite = form.checkbox("Overwrite vector store?")
     query = form.text_area("Ask something about the site",
                 placeholder="Can you give me a short summary?"
     )
