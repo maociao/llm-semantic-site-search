@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import requests
+from urllib.parse import urlparse, urlunparse
 from bs4 import BeautifulSoup as bs
 from langchain.embeddings import LlamaCppEmbeddings
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -74,7 +75,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             st.error(f"Error: no links found in {sitemap_url}")
             return()
 
-        store_name = f"{url}.vdb"
+        store_name = f"{url}-{model_name}.vdb"
         # check for vdb overwrite
         if not os.path.exists(store_name) or overwrite:
             # load site pages
@@ -85,6 +86,12 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
 
             for i, link in enumerate(links):
                 link = link.string
+
+                # fix broken sitemap (www.sappi-psp.com as an example)
+                if url not in link:
+                    print(f"link = {link}")
+                    parsed_url = urlparse(link)
+                    link = urlunparse(parsed_url._replace(netloc=url))
 
                 load_status.progress(i/num_links, text=f"Loading {link}")
 

@@ -1,5 +1,4 @@
 # ignore models
 models/**
-backup/
 .venv/
 *.vdb/
