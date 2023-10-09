@@ -1,4 +1,4 @@
 # ignore models
-models/
+models/**
 .venv/
 *.vdb/

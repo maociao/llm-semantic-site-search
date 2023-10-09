@@ -1,27 +1,31 @@
-# sych-blog-llm-qa-app
+# LLM Semantic Site Search
 
-Source code for the LLM Q/A App created in the article: https://sych.io/blog/how-to-augment-chatgpt-with-your-own-data
+This project was taken on a weekend to learn about langchain and semantic search and how to build a search engine using streamlit.  
+
+I used the https://github.com/sychhq/sych-blog-llm-qa-app.git as a template for this project.
+
+This app is an LLM powered search engine that crawls a website's sitemap and performs a semantic search on the site, returning top results with an AI description of the relevancy of the link to your query.
 
 ### Instructions
 
 #### Clone Repo
 
 ```
-git clone https://github.com/sychhq/sych-blog-llm-qa-app/
+git clone https://github.com/maociao/llm-semantic-site-search.git
 ```
 
 #### Create And Activate Virtual Environemnt
 
 ```
-cd sych-blog-llm-qa-app
-python3 -m venv llm_qa_app_venv
-source llm_qa_app_venv/bin/activate
+cd llm-semantic-site-search
+python -m venv llm_search_app_venv
+source llm_search_app_venv/bin/activate
 ```
 
 #### Install Dependencies
 
 ```
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 #### Run The App
