@@ -81,7 +81,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             load_status = st.progress(0, text=f"Loading sitemap")
 
             # limit our results for debugging <-- DEBUG CODE
-            num_links = 5
+            #num_links = 5
 
             for i, link in enumerate(links):
                 link = link.string
@@ -89,8 +89,8 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                 load_status.progress(i/num_links, text=f"Loading {link}")
 
                 # limit our results for debugging <-- DEBUG CODE
-                if i == num_links:
-                   break
+                #if i == num_links:
+                #   break
                 
                 # get page
                 try:
@@ -108,6 +108,9 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                 except requests.exceptions.RequestException as e:
                     st.error(f"skipping {link} due to Request failed: {e}")
                     continue
+                except requests.exceptions.ConnectionError as e:
+                    st.error(f"skipping {link} due to Connection error: {e}")
+                    continue
 
                 header_template = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134",
@@ -118,23 +121,39 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
 
                 # check content-type and select appropriate document loader
                 content_type = response.headers.get('content-type')
+
+                # check if content_type is None before checking for substrings
+                if content_type is None:
+                    st.error(f"Unable to determine content type for {link}")
+                    continue 
+                
+                # skip to the next iteration of the loop
                 if 'application/pdf' in content_type:
-                    loader = PyPDFLoader(link) 
-                    docs.extend(loader.load_and_split())
+                    try:
+                        loader = PyPDFLoader(link) 
+                        docs.extend(loader.load_and_split())
+                    except Exception as e:
+                        st.error(f"Error loading PDF {link}: {e}")
+                        continue
                 elif 'text/html' in content_type:
                     loader = WebBaseLoader(link,
                                 verify_ssl=False,
                                 header_template=header_template
                     )
                     html2text = Html2TextTransformer()
-                    doc = loader.load_and_split()
-                    docs.extend(html2text.transform_documents(doc))
+                    try:
+                        doc = loader.load_and_split()
+                        docs.extend(html2text.transform_documents(doc))
+                    except Exception as e:
+                        st.error(f"Error loading HTML {link}: {e}")
+                        continue
                 else:
-                    st.error('Unhandled content type skipped: {}'.format(content_type))
+                    st.error(f"Skipping {link} due to unsupported content type: {content_type}")
                     continue
 
             load_status.empty()
             
+            # refactor this to add to vetor store in for loop
             if model_type != "none":
                 # Check for and create Vector Store 
                 vector_load = st.spinner(f"Updating Vector Store...")
@@ -158,9 +177,13 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
 
         # search vector store for documents similar to user query, return to 5 results
         kwargs = {'score_threshold': 0.6}
-        docs_with_scores = vector_store.similarity_search_with_relevance_scores(query=query, k=20, **kwargs)
-        sorted_docs_with_scores = sorted(docs_with_scores, key=lambda x: x[1], reverse=True)
-
+        try:
+            docs_with_scores = vector_store.similarity_search_with_relevance_scores(query=query, k=20, **kwargs)
+            sorted_docs_with_scores = sorted(docs_with_scores, key=lambda x: x[1], reverse=True)
+        except Exception as e:
+            st.error(f"An error occured trying to search the vector store: {e}")
+            return()
+        
         documents = []
         seen_sources = set()
         unique_docs_with_scores = []
