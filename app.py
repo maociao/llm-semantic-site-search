@@ -12,11 +12,16 @@ from langchain.callbacks import get_openai_callback
 from langchain.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain.document_transformers import Html2TextTransformer
 
+# Import app configuration
+from config import api_key, result_threshold, score_threshold, openai_embedding_model, openai_inference_models, local_models, llm_temperature
+
+# Begin application
+# Create sidebar widget
 with st.sidebar:
     st.title("LLM Semantic Site Search")
     st.markdown('''
     ## About
-    This app is an LLM powered search engine that crawls a website's sitemap and performs a semantic search on the site, returning top results with an AI description of the relevancy of the link to your query.
+    This app is an LLM powered search engine that crawls a website's sitemap and performs a semantic search of the site based on your query.
     - [View the source code](https://github.com/maociao/llm-semantic-site-search)
     ''')
 
@@ -30,15 +35,15 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             url = url.split("/")[2]
 
         # load our model
-        if model_name in "gpt-3.5-turbo-16k":
+        if model_name in openai_inference_models:
             # check if OPENAI_API_KEY is set
-            api_key = os.getenv("OPENAI_API_KEY")
             if api_key == "":
                 st.error("Error: environment variable OPENAI_API_KEY is not set")
                 return()
             model_type = "openai"
-            embedding = OpenAIEmbeddings(openai_api_key=api_key, model="text-embedding-ada-002")
-        elif model_name in ["ggml-alpaca-7b-q4", "mistral-7B-v0.1"]:
+            embedding = OpenAIEmbeddings(openai_api_key=api_key, model=openai_embedding_model)
+            store_name = f"{url}-{openai_embedding_model}.vdb"
+        elif model_name in local_models:
             curdir = os.path.curdir
             model_path = os.path.join(curdir, "models", model_name + ".bin")
             # check if model_path exists
@@ -47,6 +52,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                 return()
             model_type = "local"
             embedding = LlamaCppEmbeddings(model_path)
+            store_name = f"{url}-{model_name}.vdb"
         else:
             model_type = "none"
             return()
@@ -64,8 +70,6 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
         
         sitemap_xml = response.text
 
-        docs = []
-
         # loop through all urls in sitemap_xml
         link_list = bs(sitemap_xml, "xml")
         links = link_list.find_all("loc")
@@ -75,15 +79,16 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             st.error(f"Error: no links found in {sitemap_url}")
             return()
 
-        store_name = f"{url}-{model_name}.vdb"
         # check for vdb overwrite
         if not os.path.exists(store_name) or overwrite:
-            # load site pages
+
+            # configure our loading status widget
             load_status = st.progress(0, text=f"Loading sitemap")
 
-            # limit our results for debugging <-- DEBUG CODE
-            #num_links = 5
-
+            # create our docs container
+            docs = []
+            
+            # load pages and documents from sitemap
             for i, link in enumerate(links):
                 link = link.string
 
@@ -95,10 +100,6 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
 
                 load_status.progress(i/num_links, text=f"Loading {link}")
 
-                # limit our results for debugging <-- DEBUG CODE
-                #if i == num_links:
-                #   break
-                
                 # get page
                 try:
                     response = requests.get(link)
@@ -178,14 +179,13 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                 st.error(f"An error occured reading the vector store: {e}")
                 return()
 
-
     # Run user query. check on model is to keep streamlit from running query without a model
     if query and model_name != "model":
 
         # search vector store for documents similar to user query, return to 5 results
-        kwargs = {'score_threshold': 0.6}
+        kwargs = {'score_threshold': score_threshold}
         try:
-            docs_with_scores = vector_store.similarity_search_with_relevance_scores(query=query, k=20, **kwargs)
+            docs_with_scores = vector_store.similarity_search_with_relevance_scores(query=query, k=result_threshold, **kwargs)
             sorted_docs_with_scores = sorted(docs_with_scores, key=lambda x: x[1], reverse=True)
         except Exception as e:
             st.error(f"An error occured trying to search the vector store: {e}")
@@ -201,15 +201,16 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             score = document_tuple[1]
             source = document.metadata['source']
 
-            if score < 0.2:
+            # the FAISS kwargs score_threshold does not seem to always work
+            if score < score_threshold:
                 continue
 
+            # Remove duplicate sources
             if source not in seen_sources:
-                # If the source is not in seen_sources, add it to seen_sources and keep the document_tuple
                 seen_sources.add(source)
                 unique_docs_with_scores.append(document_tuple)
             
-            # capture docs for query_response
+            # capture all docs for query_response
             documents.append(document_tuple[0])
 
         # if there are no results
@@ -218,7 +219,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             return()
 
         # Setup llm chain
-        llm = ChatOpenAI(openai_api_key=api_key, temperature=0.9, verbose=True, model=model_name)
+        llm = ChatOpenAI(openai_api_key=api_key, temperature=llm_temperature, verbose=True, model=model_name)
         chain = load_qa_chain(llm=llm, chain_type="stuff")
 
         # Get query response based on all matches
@@ -243,7 +244,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
 
             #Callback and Query Information
             with get_openai_callback() as cb:
-                quiestion = "In two sentences or less, summarize how the document relates to the following query: " + query
+                quiestion = "In three sentences or less, summarize how the document relates to the following query: " + query
                 response = chain.run(input_documents=doc, question=quiestion)
                 with st.expander("Document summary"):
                     st.write(response)
@@ -262,14 +263,15 @@ def main():
     st.header("LLM Semantic Site Search")
 
     form = st.form(key='my_form')
+    model_list = ["model"] + openai_inference_models + local_models
     model_name = form.selectbox("Select a model",
-        ("model","gpt-3.5-turbo-16k",'ggml-alpaca-7b-q4','mistral-7B-v0.1'),
+        tuple(model_list),
         index=0
     )
     url = form.text_input("Enter the url of the site to search")
     overwrite = form.checkbox("Overwrite vector store?")
     query = form.text_area("Ask something about the site",
-                placeholder="Can you give me a short summary?"
+                placeholder="Does this site contain any information about bananas?"
     )
     form.form_submit_button("Run", on_click=submit(url=url, query=query, model_name=model_name, overwrite=overwrite))
 

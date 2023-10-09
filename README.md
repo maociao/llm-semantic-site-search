@@ -21,44 +21,56 @@ Why? Well, because it was what
 
 ### What's next?
 
-* Adding support for LLaMa2 and Mistral models
-* Adding the choice to use an existing vector store (already uses vector store if it exists unless you choose to override)
-* Add a config file
-* Refactor code to simplify
+- [ ] Adding support for LLaMa2 and Mistral models
+- [ ] Adding the choice to use an existing vector store (already uses vector store if it exists unless you choose to override)
+- [x] Add a config file
+- [ ] Refactor code to simplify
 
 ## Instructions
 
 Python 3.10.11+ is required to run this app. [Download it here](https://www.python.org/downloads/)
 
-#### Clone Repo
+### Clone Repo
 
-```bash
+```shell
 git clone https://github.com/maociao/llm-semantic-site-search.git
 ```
 
-#### Create And Activate Virtual Environemnt
+### Create And Activate Virtual Environemnt
 
 Linux/MacOS:
-```bash
+```shell
 cd llm-semantic-site-search
 python -m venv llm_search_app_venv
 source llm_search_app_venv/bin/activate
 ```
 
 Windows:
-```bash
+```shell
 cd llm-semantic-site-search
 python -m venv llm_search_app_venv
 llm_search_app_venv\Scripts\activate.bat
 ```
 
-#### Install Dependencies
+### Install Dependencies
 
-```bash
+```shell
 pip install -r requirements.txt
 ```
 
-#### Run The App
+### Configure The App
+
+Linux/MacOS:
+```shell
+export OPENAI_API_KEY="Your API key from https://platform.openai.com/"
+```
+
+Windows:
+```shell
+SET OPENAI_API_KEY="Your API key from https://platform.openai.com/"
+```
+
+### Run The App
 
 ```bash
 streamlit run app.py

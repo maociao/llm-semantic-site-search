@@ -1,4 +1,9 @@
-# ignore models
-models/**
+# ignore environment artifacts
 .venv/
+
+# ignore models and vector stores
+models/**
 *.vdb/
+
+# ignore temporary runtime objects
+__pycache__/
