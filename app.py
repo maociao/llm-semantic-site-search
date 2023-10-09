@@ -227,7 +227,10 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             score = document_tuple[1]
             doc = [document]
             source = doc[0].metadata['source']
-            title = doc[0].metadata['title']
+            try:
+                title = doc[0].metadata['title']
+            except KeyError:
+                title = "Missing Title"
             st.write(f"{title}")
             st.write(f"**{source}** Score: {score}")
 
