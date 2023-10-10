@@ -16,10 +16,10 @@ local_models = ['ggml-alpaca-7b-q4','mistral-7B-v0.1']
 #
 # LLM temperature. The higher the temperature the more creative the results
 llm_temperature = 0.9
-
+#
 # This is the number of search results to return.
 result_threshold = 10
-
+#
 # This is the score threshold for search results. Any result below this threshold is disregarded.
 score_threshold = 0.5
 
