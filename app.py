@@ -7,13 +7,14 @@ from langchain.embeddings import LlamaCppEmbeddings
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chat_models import ChatOpenAI
+from langchain.llms.llamacpp import LlamaCpp
 from langchain.chains.question_answering import load_qa_chain
 from langchain.callbacks import get_openai_callback
 from langchain.document_loaders import PyPDFLoader, WebBaseLoader
 from langchain.document_transformers import Html2TextTransformer
 
 # Import app configuration
-from config import api_key, result_threshold, score_threshold, openai_embedding_model, openai_inference_models, local_models, llm_temperature
+from config import api_key, result_threshold, score_threshold, openai_embedding_model, openai_inference_models, local_models, llm_temperature, n_ctx, n_gpu_layers
 
 # Begin application
 # Create sidebar widget
@@ -53,7 +54,11 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                 st.error(f"Error: {model_name} model does not exist")
                 return()
             model_type = "local"
-            embedding = LlamaCppEmbeddings(model_path)
+            embedding = LlamaCppEmbeddings(
+                model_path=model_path,
+                n_ctx=n_ctx,
+                n_gpu_layers=n_gpu_layers,
+            )
             store_name = f"{url}-{model_name}.vdb"
         else:
             model_type = "none"
@@ -204,12 +209,26 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
         # search vector store for documents similar to user query, return to 5 results
         kwargs = {'score_threshold': score_threshold}
         try:
-            docs_with_scores = vector_store.similarity_search_with_relevance_scores(query=query, k=result_threshold, **kwargs)
-            sorted_docs_with_scores = sorted(docs_with_scores, key=lambda x: x[1], reverse=True)
+            docs_with_scores = vector_store.similarity_search_with_relevance_scores(
+                query=query,
+                k=result_threshold,
+                **kwargs
+            )
         except Exception as e:
             st.error(f"An error occured trying to search the vector store: {e}")
             return()
         
+        if len(docs_with_scores) == 0:
+            st.error(f"No results returned from vector store.")
+            return()
+        
+        # sort results by score descending highest to lowest
+        sorted_docs_with_scores = sorted(
+            docs_with_scores,
+            key=lambda x: x[1],
+            reverse=True
+        )
+
         documents = []
         seen_sources = set()
         unique_docs_with_scores = []
@@ -238,7 +257,27 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             return()
 
         # Setup llm chain
-        llm = ChatOpenAI(openai_api_key=api_key, temperature=llm_temperature, verbose=True, model=model_name)
+        if model_name in openai_inference_models:
+            llm = ChatOpenAI(
+                openai_api_key=api_key,
+                temperature=llm_temperature,
+                verbose=True,
+                model=model_name
+            )
+        elif model_name in local_models:
+            llm = LlamaCpp(
+                verbose=True,
+                model_path=model_path,
+                n_ctx=n_ctx,
+                n_gpu_layers=n_gpu_layers,
+                max_tokens=4096,
+                temperature=llm_temperature,
+            )
+        else:
+            # should not happen
+            st.error(f"Model not found!")
+            return()
+
         chain = load_qa_chain(llm=llm, chain_type="stuff")
 
         # Get query response based on all matches
