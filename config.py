@@ -26,8 +26,10 @@ score_threshold = 0.5
 local_models = ['llama-2-7b.Q4_K_M','mistral-7b-v0.1.Q4_K_M']
 #
 # model context window
-n_ctx = 8192
+n_ctx = 4096
 #
-# nomber of layers to load in gpu
+# nomber of layers to load in gpu [Requires CUDA]
 n_gpu_layers = 32
+
+
 

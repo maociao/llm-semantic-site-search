@@ -108,6 +108,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                     parsed_url = urlparse(link)
                     link = urlunparse(parsed_url._replace(netloc=url))
 
+                # load UI progress widget
                 load_status.progress(i/num_links, text=f"Loading {link}")
 
                 # get page
