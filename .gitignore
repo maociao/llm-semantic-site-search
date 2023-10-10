@@ -5,5 +5,10 @@
 models/**
 *.vdb/
 
-# ignore temporary runtime objects
+# ignore caches, logs, and temporary runtime objects
 __pycache__/
+
+# ignore test artifacts
+test_sitemap.xml
+scratch.py
+Notes.md

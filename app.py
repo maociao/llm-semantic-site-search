@@ -29,6 +29,9 @@ def submit(url=str, query=str, model_name=str, overwrite=bool):
     run(url, query, model_name, overwrite)
 
 def run(url=str, query=str, model_name=str, overwrite=bool):    
+
+    app_home = os.path.dirname(os.path.abspath(__file__))
+
     if url:
         # check if url is domain only if not then split the url into domain and path
         if "/" in url:
@@ -44,8 +47,7 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             embedding = OpenAIEmbeddings(openai_api_key=api_key, model=openai_embedding_model)
             store_name = f"{url}-{openai_embedding_model}.vdb"
         elif model_name in local_models:
-            curdir = os.path.curdir
-            model_path = os.path.join(curdir, "models", model_name + ".bin")
+            model_path = os.path.join(app_home, "models", model_name + ".gguf")
             # check if model_path exists
             if not os.path.exists(model_path):
                 st.error(f"Error: {model_name} model does not exist")
@@ -59,9 +61,6 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
 
         # Load the sitemap.xml file from the url
         sitemap_url = f"https://{url}/sitemap.xml"
-
-        print(f"Loading {sitemap_url}")
-
         try:
             response = requests.get(sitemap_url)
         except Exception as e:
@@ -69,6 +68,12 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
             return()
         
         sitemap_xml = response.text
+
+        # read local sitemap.xml override for testing
+        test_file = os.path.join(app_home, 'test_sitemap.xml')
+        if os.path.exists(test_file):
+            with open(test_file, 'r') as f:
+                sitemap_xml = f.read()
 
         # loop through all urls in sitemap_xml
         link_list = bs(sitemap_xml, "xml")
@@ -135,23 +140,33 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                     st.error(f"Unable to determine content type for {link}")
                     continue 
                 
-                # skip to the next iteration of the loop
+                # Load and parse document based on document type
                 if 'application/pdf' in content_type:
                     try:
-                        loader = PyPDFLoader(link) 
-                        docs.extend(loader.load_and_split())
+                        loader = PyPDFLoader(
+                            file_path=link,
+                            headers=header_template
+                        )
+                        pdf_docs = loader.load_and_split()
+
+                        # the pdf loader replaces the link as the source with a local filename.
+                        # this is to restore the original link as the docuemnt source (Issue: #3)
+                        for i in enumerate(pdf_docs):
+                            pdf_docs[i[0]].metadata["source"] = link
+                        docs.extend(pdf_docs)
                     except Exception as e:
                         st.error(f"Error loading PDF {link}: {e}")
                         continue
                 elif 'text/html' in content_type:
-                    loader = WebBaseLoader(link,
-                                verify_ssl=False,
-                                header_template=header_template
+                    loader = WebBaseLoader(
+                        link,
+                        verify_ssl=False,
+                        header_template=header_template
                     )
                     html2text = Html2TextTransformer()
                     try:
-                        doc = loader.load_and_split()
-                        docs.extend(html2text.transform_documents(doc))
+                        html_docs = loader.load_and_split()
+                        docs.extend(html2text.transform_documents(html_docs))
                     except Exception as e:
                         st.error(f"Error loading HTML {link}: {e}")
                         continue
@@ -160,6 +175,10 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                     continue
 
             load_status.empty()
+
+            if len(docs) == 0:
+                st.error(f"No documents found in {sitemap_url}")
+                return()
             
             # refactor this to add to vetor store in for loop
             if model_type != "none":
