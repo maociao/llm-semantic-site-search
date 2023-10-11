@@ -1,7 +1,7 @@
 beautifulsoup4==4.12.2
 faiss-cpu==1.7.4
 html2text==2020.1.16
-langchain==0.0.310
+langchain==0.0.312
 llama-cpp-python==0.2.11
 lxml==4.9.3
 openai==0.28.1

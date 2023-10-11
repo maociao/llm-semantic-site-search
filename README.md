@@ -7,7 +7,6 @@ Rohan Chopra's blog post, [How to augment LLMs like ChatGPT with your own data](
 This app is an LLM powered search engine that crawls a website's sitemap and performs a semantic search on the site, returning top results with an AI description of the relevancy of the link to your query.
 
 ### Technical information
-Why? Well, because it was what 
 
 * [Streamlit](https://streamlit.io/) was used as the application framework.
 * For OpenAI embeddings I'm using the text-embedding-ada-002-v2 model and for the search inference I'm using the gpt-3.5-turbo-16k-0613 model.  Both were chosen based on their large context windows of 8K and 16K tokens respectively.  I went with the gpt-3 model instead of gpt-4 due to speed and cost.  More on OpenAI embeddings can be found here - [New and improved embedding model](https://openai.com/blog/new-and-improved-embedding-model)
@@ -26,9 +25,19 @@ Why? Well, because it was what
 - [x] Add a config file
 - [ ] Refactor code to simplify
 
-## Instructions
+## Installation
 
-Python 3.10.11+ is required to run this app. [Download it here](https://www.python.org/downloads/)
+### Requirements
+
+Python 3.10.11 - 3.11.0 is recommened to run this app. [Download it here](https://www.python.org/downloads/)
+Several of the dependencies do not have wheels for Python 3.12, so you will need to install them from source if you choose to use Python 3.12.
+
+#### Specific instructions for Windows installations
+
+The llama-cpp-python library requires a C++ compiler.
+If you want to run local models you will need to install [Visual Studio](https://visualstudio.microsoft.com/downloads/)
+If you do not plan on running local models you can skip that and just comment out the llama-cpp-python library in requirements.txt.
+The app will run with just the OpenAI models.
 
 ### Clone Repo
 
