@@ -26,10 +26,10 @@ with st.sidebar:
     - [View the source code](https://github.com/maociao/llm-semantic-site-search)
     ''')
 
-def submit(url=str, query=str, model_name=str, overwrite=bool):
-    run(url, query, model_name, overwrite)
+#def submit(url=str, query=str, model_name=str, overwrite=bool):
+#    run(url, query, model_name, overwrite)
 
-def run(url=str, query=str, model_name=str, overwrite=bool):    
+def submit(url, query, model_name, overwrite):    
 
     app_home = os.path.dirname(os.path.abspath(__file__))
 
@@ -115,20 +115,8 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                 try:
                     response = requests.get(link)
                     response.raise_for_status()  # This will raise an HTTPError for bad responses (4xx and 5xx)
-                except requests.exceptions.SSLError as e:
-                    st.error(f"skipping {link} due to SSL error: {e}")
-                    continue
-                except requests.exceptions.Timeout as e:
-                    st.error(f"skipping {link} due to Timeout error: {e}")
-                    continue
-                except requests.exceptions.TooManyRedirects as e:
-                    st.error(f"skipping {link} due to Too many redirects: {e}")
-                    continue
                 except requests.exceptions.RequestException as e:
                     st.error(f"skipping {link} due to Request failed: {e}")
-                    continue
-                except requests.exceptions.ConnectionError as e:
-                    st.error(f"skipping {link} due to Connection error: {e}")
                     continue
 
                 header_template = {
@@ -197,10 +185,13 @@ def run(url=str, query=str, model_name=str, overwrite=bool):
                     except RecursionError as e:
                         st.error(f"RecusionError trying to save vector store: {e}")
                         return()
+                    except Exception as e:
+                        st.error(f"An error occured trying to save vector store: {e}")
+                        return()
         else:
             try:
                 vector_store = FAISS.load_local(store_name, embeddings=embedding)
-            except EOFError as e:
+            except Exception as e:
                 st.error(f"An error occured reading the vector store: {e}")
                 return()
 
@@ -332,7 +323,7 @@ def main():
     query = form.text_area("Ask something about the site",
                 placeholder="Does this site contain any information about bananas?"
     )
-    form.form_submit_button("Run", on_click=submit(url=url, query=query, model_name=model_name, overwrite=overwrite))
+    form.form_submit_button("Run", on_click=submit(url, query, model_name, overwrite))
 
 if __name__ == '__main__':
     main()
