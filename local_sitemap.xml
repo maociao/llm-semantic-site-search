@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <!-- Add you own list of urls here and rename to sitemap.xml to override the default site search functionality.
+    Enter a name for your vector store in the url field of the search page. -->
+    <url><loc>http://www.example.com</loc><url>
+</urlset>

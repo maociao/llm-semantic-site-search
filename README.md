@@ -23,14 +23,14 @@ This app is an LLM powered search engine that crawls a website's sitemap and per
 - [X] Add support for LLaMa2 and Mistral models
 - [ ] Add the choice to use an existing vector store (already uses vector store if it exists unless you choose to override)
 - [x] Add a config file
-- [ ] Refactor to simplify code
-- [ ] Add caching to improve performance
-- [ ] Switch to using LangChain sitemap API
+- [x] Refactor to simplify code
+- [x] Add caching to improve performance
 - [ ] Enrich vector embeddings with additional metadata
 - [ ] Enrich vector embeddings with questions
 - [ ] Add support for [Figma](https://python.langchain.com/docs/integrations/document_loaders/figma)
 - [ ] Add support for [GitHub Issues](https://python.langchain.com/docs/integrations/document_loaders/github)
 - [ ] Add support for [Confluence](https://python.langchain.com/docs/integrations/document_loaders/confluence)
+- [ ] Add support for GCP hosted models
 
 ## Installation
 
