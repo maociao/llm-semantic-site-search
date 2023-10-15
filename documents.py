@@ -1,4 +1,5 @@
 import os
+import ast
 import time
 import uuid
 import logging
@@ -107,10 +108,23 @@ def load_documents(source, model, reindex):
             sitemap_xml = response.text
 
         # load sitemap links
-        link_list = bs(sitemap_xml, "xml")
-        links = link_list.find_all("loc")
-        num_links = len(links)
+        soup = bs(sitemap_xml, "xml")
+        loc_tags = soup.find_all('loc')
+        # convert bs resultset into a list of links
+        links = [tag.text for tag in loc_tags]
 
+        # check for checkpoint register
+        if os.path.exists(f".{url}.list"):
+            with open(f".{url}.list", 'r') as f:
+                s_links = f.read()
+                links=ast.literal_eval(s_links)
+                resume = True
+        else:
+            # create checkpoint register
+            with open(f".{url}.list", "w") as f:
+                f.write(str(links))        
+
+        num_links = len(links)
         if num_links == 0:
             logger(f"Error: no links found in {sitemap_url}", "error")
             return None
@@ -118,8 +132,8 @@ def load_documents(source, model, reindex):
         logger(f"Found {num_links} links in {sitemap_url}", "info")
 
         # load documents from links
-        for i, link in enumerate(links):
-            link = link.string
+        for index, link in enumerate(links):
+#            link = link.string
             loader = ''
 
             # set some metadata
@@ -132,18 +146,22 @@ def load_documents(source, model, reindex):
             metadata['date'] = current_datetime.strftime("%Y-%m-%d %H:%M:%S %Z")
 
             # update progress
-            status_bar.progress(i/num_links, text=f"Loading {i+1} of {num_links} pages: {link}")
+            status_bar.progress(index/num_links, text=f"Loading {index+1} of {num_links} pages: {link}")
 
             logger(f"Fetching {link}", "info")
 
             # get page
+            content_type = None
             try:
-                response = requests.get(link)
+                response = requests.head(link, allow_redirects=True)
                 response.raise_for_status()  # This will raise an HTTPError for bad responses (4xx and 5xx)
+                content_type = response.headers.get('content-type')
             except requests.exceptions.RequestException as e:
                 logger(f"skipping {link} due to Request failed: {e}", "warning")
+                continue
             except requests.exceptions as e:
                 logger(f"skipping {link} due to Request failed: {e}", "warning")
+                continue
 
             header_template = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134",
@@ -152,13 +170,11 @@ def load_documents(source, model, reindex):
                 "Cache-Control": "no-cache"
             }
 
-            # check content-type and select appropriate document loader
-            content_type = response.headers.get('content-type')
-
             # check if content_type is None before checking for substrings
             if content_type is None:
                 logger(f"Unable to determine content type for {link}", "warning")
-            
+                continue
+
             # Load and parse document based on document type
             if 'application/pdf' in content_type:
                 logger(f"Loading PDF {link}", "info")
@@ -199,6 +215,7 @@ def load_documents(source, model, reindex):
             # unsupported content type
             if loader == '':
                 logger(f"Skipping {link} due to unsupported content type: {content_type}", "warning")
+                continue
 
             # enrich data with llm prompt
             metadata['title'] = ''
@@ -219,6 +236,14 @@ def load_documents(source, model, reindex):
             except Exception as e:
                 logger(f"Error saving document embedding: {e}", "error")
                 return None
+
+            # update checkpoint register
+            register = links[index+1:]
+            if len(register) == 0:
+                os.remove(f".{url}.list")
+            else:
+                with open(f".{url}.list", "w") as f:
+                    f.write(str(register))
 
         # clar progress bar and messages
         time.sleep(3)
