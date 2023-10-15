@@ -6,12 +6,12 @@ Rohan Chopra's blog post, [How to augment LLMs like ChatGPT with your own data](
 
 This app is an LLM powered search engine that crawls a website's sitemap and performs a semantic search on the site, returning top results with an AI description of the relevancy of the link to your query.
 
-### Technical information
+### Technical details
 
-* [Streamlit](https://streamlit.io/) was used as the application framework.
-* For OpenAI embeddings I'm using the text-embedding-ada-002-v2 model and for the search inference I'm using the gpt-3.5-turbo-16k-0613 model.  Both were chosen based on their large context windows of 8K and 16K tokens respectively.  I went with the gpt-3 model instead of gpt-4 due to speed and cost.  More on OpenAI embeddings can be found here - [New and improved embedding model](https://openai.com/blog/new-and-improved-embedding-model)
-* The vector store and search is using Meta's [FAISS](https://github.com/facebookresearch/faiss)
-* The LLM workflow framework is using [LangChain](https://docs.langchain.com/docs/)
+* [Streamlit](https://streamlit.io/) was used for the application UI.
+* [New and improved embedding model](https://openai.com/blog/new-and-improved-embedding-model) text-embedding-ada-002-v2 from OpenAI.
+* [FAISS](https://github.com/facebookresearch/faiss) for vector store and similarity search.
+* [LangChain](https://docs.LangChain.com/docs/) is the llm application framework
 
 ### Some learnings
 
@@ -20,10 +20,17 @@ This app is an LLM powered search engine that crawls a website's sitemap and per
 
 ### What's next?
 
-- [ ] Adding support for LLaMa2 and Mistral models
-- [ ] Adding the choice to use an existing vector store (already uses vector store if it exists unless you choose to override)
+- [X] Add support for LLaMa2 and Mistral models
+- [ ] Add the choice to use an existing vector store (already uses vector store if it exists unless you choose to override)
 - [x] Add a config file
-- [ ] Refactor code to simplify
+- [x] Refactor to simplify code
+- [x] Add caching to improve performance
+- [ ] Enrich vector embeddings with additional metadata
+- [ ] Enrich vector embeddings with questions
+- [ ] Add support for [Figma](https://python.langchain.com/docs/integrations/document_loaders/figma)
+- [ ] Add support for [GitHub Issues](https://python.langchain.com/docs/integrations/document_loaders/github)
+- [ ] Add support for [Confluence](https://python.langchain.com/docs/integrations/document_loaders/confluence)
+- [ ] Add support for GCP hosted models
 
 ## Installation
 

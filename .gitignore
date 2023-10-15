@@ -3,12 +3,14 @@
 
 # ignore models and vector stores
 models/**
-*.vdb/
+data/*.vdb/
 
 # ignore caches, logs, and temporary runtime objects
 __pycache__/
+cache/
 
 # ignore test artifacts
-test_sitemap.xml
+sitemap.xml
 scratch.py
 Notes.md
+*.bak
