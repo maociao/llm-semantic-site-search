@@ -67,12 +67,17 @@ def submit(url, query, model_name, reindex):
             score = document_tuple[1]
             doc = [document]
             source = doc[0].metadata['source']
+#            date = doc[0].metadata['date']
+#            content_type = doc[0].metadata['content-type']
+#            language = doc[0].metadata['language']
             try:
                 title = doc[0].metadata['title']
             except KeyError:
                 title = "Missing Title"
-            st.write(f"{title}")
-            st.write(f"**{source}** Score: {score}")
+            st.markdown(f"### {title}")
+#            st.write(f"Date: {date} Content Type: {content_type} Language: {language}")
+            st.write(f"**{source}**")
+            st.write(f"Score: {score}")
 
             #Callback and Query Information
             with get_openai_callback() as cb:

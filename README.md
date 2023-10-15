@@ -89,5 +89,5 @@ SET OPENAI_API_KEY="Your API key from https://platform.openai.com/"
 ### Run The App
 
 ```bash
-streamlit run app.py
+streamlit run lassy.py
 ```

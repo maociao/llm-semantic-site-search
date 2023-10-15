@@ -20,21 +20,16 @@ logging.basicConfig(level=logging.INFO)
 
 documents = []
 metadata = {}
-metadata['source'] = ''
 metadata['title'] = ''
 metadata['author'] = ''
-metadata['date'] = ''
 metadata['keywords'] = ''
 metadata['abstract'] = ''
 metadata['language'] = ''
-metadata['type'] = ''
 metadata['format'] = ''
-metadata['identifier'] = ''
 metadata['coverage'] = ''
 metadata['rights'] = ''
 metadata['relation'] = ''
 metadata['size'] = ''
-metadata['format'] = ''
 vectorstore = {}
 
 status_bar = st.empty()
@@ -118,7 +113,6 @@ def load_documents(source, model, reindex):
             with open(f".{url}.list", 'r') as f:
                 s_links = f.read()
                 links=ast.literal_eval(s_links)
-                resume = True
         else:
             # create checkpoint register
             with open(f".{url}.list", "w") as f:
@@ -133,17 +127,8 @@ def load_documents(source, model, reindex):
 
         # load documents from links
         for index, link in enumerate(links):
-#            link = link.string
+            docs = []
             loader = ''
-
-            # set some metadata
-            metadata['identifier'] = uuid.uuid5(uuid.NAMESPACE_URL, url)
-            metadata['source'] = url
-            metadata['size'] = ''
-
-            #current date and time
-            current_datetime = datetime.datetime.now(pytz.utc)
-            metadata['date'] = current_datetime.strftime("%Y-%m-%d %H:%M:%S %Z")
 
             # update progress
             status_bar.progress(index/num_links, text=f"Loading {index+1} of {num_links} pages: {link}")
@@ -189,11 +174,11 @@ def load_documents(source, model, reindex):
                     # the pdf loader replaces the link as the source with a local filename.
                     # this is to restore the original link as the docuemnt source (Issue: #3)
                     for i in enumerate(pdf_docs):
-                        pdf_docs[i[0]].metadata["source"] = link
+                        pdf_docs[i[0]].metadata["source"] = response.url
                 except Exception as e:
                     logger(f"Failed loading PDF {link}: {e}", "warning")
                 
-                documents.extend(pdf_docs)
+                docs.extend(pdf_docs)
 
             if 'text/html' in content_type:
                 loader = WebBaseLoader(
@@ -210,20 +195,31 @@ def load_documents(source, model, reindex):
                 except Exception as e:
                     replaceable.warning(f"Error loading HTML {link}: {e}")
 
-                documents.extend(html2text.transform_documents(html_docs))
+                docs.extend(html2text.transform_documents(html_docs))
 
             # unsupported content type
             if loader == '':
                 logger(f"Skipping {link} due to unsupported content type: {content_type}", "warning")
                 continue
 
-            # enrich data with llm prompt
-            metadata['title'] = ''
-            metadata['author'] = ''
-            metadata['date'] = ''
+
+
+            # set some metadata
+#            metadata['identifier'] = uuid.uuid5(uuid.NAMESPACE_URL, url)
+            metadata['date'] = response.headers.get('date')
+            metadata['content_type'] = content_type
+            metadata['language'] = response.headers.get('content-language')
             metadata['keywords'] = ''
             metadata['abstract'] = ''
-            metadata['language'] = ''
+            for i in enumerate(docs):
+                docs[i[0]].metadata['date'] = response.headers.get('date')
+                docs[i[0]].metadata['content-type'] = content_type
+                docs[i[0]].metadata['language'] = response.headers.get('content-language')
+                docs[i[0]].metadata['keywords'] = ''
+                docs[i[0]].metadata['questions'] = ''
+                docs[i[0]].metadata['abstract'] = ''
+
+            documents.extend(docs)
 
             if len(documents) == 0:
                 logger(f"No documents found in {sitemap_url}", "warning")
