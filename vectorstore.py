@@ -55,7 +55,9 @@ def load(vectorstore: dict):
     vs_path = vectorstore['path']
     vs_embedding = vectorstore['embedding']
 
-    return(FAISS.load_local(vs_path, embeddings=vs_embedding))
+    vdb = FAISS.load_local(vs_path, embeddings=vs_embedding)
+
+    return vdb
 
 def get_vectorstore(url: str, model: str):
     global replaceable
@@ -101,15 +103,17 @@ def get_vectorstore(url: str, model: str):
 
     vectorstore['model'] = model
     vectorstore['path'] = os.path.join(app_home, "data", vectorstore['name'])
-    return(vectorstore)
+    return vectorstore
 
-def search(question: str, vectorstore: list):
+def search(question: str, vectorstore: dict):
     global replaceable
+
+    vdb = load(vectorstore=vectorstore)
 
     # search vector store for documents similar to user query, return to 5 results
     kwargs = {'score_threshold': score_threshold}
     try:
-        docs_with_scores = vectorstore.similarity_search_with_relevance_scores(
+        docs_with_scores = vdb.similarity_search_with_relevance_scores(
             query=question,
             k=result_threshold,
             **kwargs
@@ -117,43 +121,10 @@ def search(question: str, vectorstore: list):
     except Exception as e:
         logger(f"An error occured trying to search the vector store: {e}", "error")
         return None
-    
-    if len(docs_with_scores) == 0:
-        logger(f"No results returned from vector store.", "error")
-        return None
-    
-    # sort results by score descending highest to lowest
-    sorted_docs_with_scores = sorted(
-        docs_with_scores,
-        key=lambda x: x[1],
-        reverse=True
-    )
-
-    documents = []
-    seen_sources = set()
-    unique_docs_with_scores = []
-
-    # filter results by scores and remove duplicate sources
-    for document_tuple in sorted_docs_with_scores:
-        document = document_tuple[0]
-        score = document_tuple[1]
-        source = document.metadata['source']
-
-        # the FAISS kwargs score_threshold does not seem to always work
-        if score < score_threshold:
-            continue
-
-        # Remove duplicate sources
-        if source not in seen_sources:
-            seen_sources.add(source)
-            unique_docs_with_scores.append(document_tuple)
-        
-        # capture all docs for query_response
-        documents.append(document_tuple[0])
 
     # if there are no results
-    if len(unique_docs_with_scores) == 0:
-        logger(f"There were no documents matching your query: {question}", "warning")
+    if len(docs_with_scores) == 0:
+        logger(f"There were no documents matching your query: {question}", "error")
         return None
 
     # Setup llm chain
@@ -178,4 +149,4 @@ def search(question: str, vectorstore: list):
         logger(f"Model not found!", "error")
         return None
 
-    return documents, llm
+    return docs_with_scores, llm

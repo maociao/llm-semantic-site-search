@@ -51,7 +51,6 @@ def logger(message, type):
         logging.info(message)
     return None
 
-@st.cache_data(allow_output_mutation=True)
 def load_documents(source, model, reindex):
     global replaceable
 
@@ -78,7 +77,7 @@ def load_documents(source, model, reindex):
         # check if vectorstore exists and return it if it does
         if os.path.exists(vectorstore['path']) and not reindex:
             try:
-                return(vectorstore)
+                return vectorstore
             except Exception as e:
                 logger(f"An error occured reading the vectorstore: {e}", "error")
                 return None
@@ -91,9 +90,9 @@ def load_documents(source, model, reindex):
         app_dir = os.path.dirname(os.path.abspath(__file__))
 
         # check for local sitemap.xml override
-        local_sitemap = os.path.join(app_dir, 'sitemap.xml')
-        if os.path.exists(local_sitemap):
-            with open(local_sitemap, 'r') as f:
+        sitemap_url = os.path.join(app_dir, 'sitemap.xml')
+        if os.path.exists(sitemap_url):
+            with open(sitemap_url, 'r') as f:
                 sitemap_xml = f.read()
 
         else:
@@ -215,7 +214,6 @@ def load_documents(source, model, reindex):
 
             # save document embeddings
             logger(f"Saving document embeddings", "info")
-
             try:
                 vs.save(documents, vectorstore)
             except Exception as e:
@@ -227,7 +225,7 @@ def load_documents(source, model, reindex):
         status_bar.empty()
         replaceable.empty()
     
-        return(vs.load(vectorstore))
+        return vectorstore
     
     else:
         replaceable.error(f"Error: Invalid or missing URL: {source}. Please enter a valid URL to search.")
