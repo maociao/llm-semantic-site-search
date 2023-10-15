@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 import streamlit as st
 from langchain.vectorstores import FAISS
@@ -10,6 +11,8 @@ from langchain.llms.llamacpp import LlamaCpp
 
 # Import app configuration
 from config import api_key, result_threshold, score_threshold, openai_embedding_model, openai_inference_models, local_models, llm_temperature, n_ctx, max_tokens, n_gpu_layers
+
+sys.setrecursionlimit(4096)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -45,6 +48,14 @@ def save(documents: dict, vectorstore: dict):
         return False
 
     return True
+
+def load(vectorstore: dict):
+    global replaceable
+
+    vs_path = vectorstore['path']
+    vs_embedding = vectorstore['embedding']
+
+    return(FAISS.load_local(vs_path, embeddings=vs_embedding))
 
 def get_vectorstore(url: str, model: str):
     global replaceable
@@ -142,7 +153,7 @@ def search(question: str, vectorstore: list):
 
     # if there are no results
     if len(unique_docs_with_scores) == 0:
-        logger(f"There were no documents matching your query: {query}", "warning")
+        logger(f"There were no documents matching your query: {question}", "warning")
         return None
 
     # Setup llm chain

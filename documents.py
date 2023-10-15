@@ -36,6 +36,7 @@ metadata['size'] = ''
 metadata['format'] = ''
 vectorstore = {}
 
+status_bar = st.empty()
 replaceable = st.empty()
 
 def logger(message, type):
@@ -50,6 +51,7 @@ def logger(message, type):
         logging.info(message)
     return None
 
+@st.cache_data(allow_output_mutation=True)
 def load_documents(source, model, reindex):
     global replaceable
 
@@ -84,7 +86,7 @@ def load_documents(source, model, reindex):
             logger(f"Reindexing vectorstore {vectorstore['path']}", "info")
 
         # configure our loading status widget
-        load_status = st.progress(0, text=f"Loading sitemap")
+        status_bar.progress(0, text=f"Loading sitemap")
 
         app_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -131,7 +133,7 @@ def load_documents(source, model, reindex):
             metadata['date'] = current_datetime.strftime("%Y-%m-%d %H:%M:%S %Z")
 
             # update progress
-            load_status.progress(i/num_links, text=f"Loading {i+1} of {num_links}: {link}")
+            status_bar.progress(i/num_links, text=f"Loading {i+1} of {num_links} pages: {link}")
 
             logger(f"Fetching {link}", "info")
 
@@ -222,9 +224,10 @@ def load_documents(source, model, reindex):
 
         # clar progress bar and messages
         time.sleep(3)
-        load_status.empty()
+        status_bar.empty()
+        replaceable.empty()
     
-        return(vectorstore)
+        return(vs.load(vectorstore))
     
     else:
         replaceable.error(f"Error: Invalid or missing URL: {source}. Please enter a valid URL to search.")

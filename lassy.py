@@ -5,7 +5,7 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain.callbacks import get_openai_callback
 
 # Import app configuration
-from config import api_key, result_threshold, score_threshold, openai_embedding_model, openai_inference_models, local_models, llm_temperature, n_ctx, n_gpu_layers
+from config import openai_inference_models, local_models
 
 def submit(url, query, model_name, reindex):
     index = None
@@ -61,36 +61,38 @@ def submit(url, query, model_name, reindex):
 
 def main():
     # Create sidebar widget
-    sidebar = None
     sidebar = st.sidebar.empty()
 
     with sidebar:
         st.title("LLM Semantic Site Search")
         st.markdown('''
         ## About
-        This app is an LLM powered search engine that crawls a website's sitemap and performs a semantic search of the site based on your query.
+        This app is an LLM powered search engine that crawls a sitemap and performs a semantic search of the site based on your query.
         - [View the source code](https://github.com/maociao/llm-semantic-site-search)
         ''')
 
     # Create search form
-    st.header("LLM Semantic Site Search")
+    search_container = st.empty()
 
     url = ""
     reindex = False
     query = ""
 
-    form = st.form(key='search_form')
-    model_list = ["model"] + openai_inference_models + local_models
-    model_name = form.selectbox("Select a model",
-        tuple(model_list),
-        index=0
-    )
-    url = form.text_input("Enter the url of the site to search")
-    reindex = form.checkbox("Reindex vector store?")
-    query = form.text_area("Ask something about the site",
-                placeholder="Does this site contain any information about bananas?"
-    )
-    form.form_submit_button("Run", on_click=submit(url, query, model_name, reindex))
+    with search_container.container():
+        st.header("LLM Semantic Site Search")
+
+        form = st.form(key='search_form')
+        model_list = ["model"] + openai_inference_models + local_models
+        model_name = form.selectbox("Select a model",
+            tuple(model_list),
+            index=0
+        )
+        url = form.text_input("Enter the url of the site to search")
+        reindex = form.checkbox("Reindex vector store?")
+        query = form.text_area("Ask something about the site",
+                    placeholder="Does this site contain any information about bananas?"
+        )
+        form.form_submit_button("Run", on_click=submit(url, query, model_name, reindex))
 
 if __name__ == '__main__':
     main()
