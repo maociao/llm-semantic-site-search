@@ -1,7 +1,7 @@
 import os
 import sys
-import logging
 import streamlit as st
+from utils import logger
 from langchain.vectorstores import FAISS
 from langchain.storage import LocalFileStore
 from langchain.embeddings import LlamaCppEmbeddings
@@ -14,33 +14,19 @@ from config import api_key, result_threshold, score_threshold, openai_embedding_
 
 sys.setrecursionlimit(4096)
 
-logging.basicConfig(level=logging.INFO)
-
-replaceable = st.empty()
-
-def logger(message, type):
-    global replaceable
-    if type == "warning":
-        logging.warning(message)
-        replaceable.warning(message)
-    elif type == "error":
-        logging.error(message)
-        replaceable.error(message)
-    else:
-        logging.info(message)
-        replaceable.info(message)
+replaceable=st.empty()
 
 def save(documents: dict, vectorstore: dict):
     global replaceable
 
-    fs = LocalFileStore("./cache/")
+    fs=LocalFileStore("./cache/")
 
     # load cached embedding
-    cached_embedder = CacheBackedEmbeddings.from_bytes_store(
+    cached_embedder=CacheBackedEmbeddings.from_bytes_store(
         vectorstore['embedding'], fs, namespace=vectorstore['embedding'].model
     )
 
-    vdb = FAISS.from_documents(documents, embedding=cached_embedder)
+    vdb=FAISS.from_documents(documents, embedding=cached_embedder)
     try:
         vdb.save_local(vectorstore['path'])
     except Exception as e:
@@ -52,19 +38,21 @@ def save(documents: dict, vectorstore: dict):
 def load(vectorstore: dict):
     global replaceable
 
-    vs_path = vectorstore['path']
-    vs_embedding = vectorstore['embedding']
+    vs_path=vectorstore['path']
+    vs_embedding=vectorstore['embedding']
 
-    vdb = FAISS.load_local(vs_path, embeddings=vs_embedding)
+    vdb=FAISS.load_local(vs_path, embeddings=vs_embedding)
 
     return vdb
 
 def get_vectorstore(url: str, model: str):
     global replaceable
-    vectorstore = {}
+    vectorstore={}
+
+    logger(f"Creating vectorstore for {url} using {model}", "info")
 
     # Set app home
-    app_home = os.path.dirname(os.path.abspath(__file__))
+    app_home=os.path.dirname(os.path.abspath(__file__))
 
     # openai vectorstore
     if model in openai_inference_models:
@@ -74,46 +62,52 @@ def get_vectorstore(url: str, model: str):
             logger("Error: environment variable OPENAI_API_KEY is not set", "error")
             return None
 
-        vectorstore['type'] = "openai"
-        vectorstore['embedding'] = OpenAIEmbeddings(
+        vectorstore['type']="openai"
+        vectorstore['embedding']=OpenAIEmbeddings(
             openai_api_key=api_key,
             model=openai_embedding_model
         )
-        vectorstore['name'] = f"{url}-{openai_embedding_model}.vdb"
+        vectorstore['name']=f"{url}-{openai_embedding_model}.vdb"
 
     # local vectorstore
     elif model in local_models:
 
-        model_path = os.path.join(app_home, "models", model + ".gguf")
+        model_path=os.path.join(app_home, "models", model + ".gguf")
         # check if model_path exists
         if not os.path.exists(model_path):
             logger(f"Error: {model} model does not exist", "error")
             return None
 
-        vectorstore['type'] = "local"
-        vectorstore['embedding'] = LlamaCppEmbeddings(
+        vectorstore['type']="local"
+        vectorstore['embedding']=LlamaCppEmbeddings(
             model_path=model_path,
             n_ctx=n_ctx,
             n_gpu_layers=n_gpu_layers,
         )
-        vectorstore['name'] = f"{url}-{model}.vdb"
+        vectorstore['name']=f"{url}-{model}.vdb"
     else:
         logger(f"Error: {model} model does not exist", "error")
         return None
 
-    vectorstore['model'] = model
-    vectorstore['path'] = os.path.join(app_home, "data", vectorstore['name'])
+    vectorstore['model']=model
+    vectorstore['path']=os.path.join(app_home, "data", vectorstore['name'])
     return vectorstore
 
 def search(question: str, vectorstore: dict):
     global replaceable
 
-    vdb = load(vectorstore=vectorstore)
+    logger(f"Loading vectorstore {vectorstore}", "info")
+
+    try:
+        vdb=load(vectorstore=vectorstore)
+    except Exception as e:
+        logger(f"An error occured trying to load the vector store: {e}", "error")
+        return None
 
     # search vector store for documents similar to user query, return to 5 results
-    kwargs = {'score_threshold': score_threshold}
+    kwargs={'score_threshold': score_threshold}
     try:
-        docs_with_scores = vdb.similarity_search_with_relevance_scores(
+        docs_with_scores=vdb.similarity_search_with_relevance_scores(
             query=question,
             k=result_threshold,
             **kwargs
@@ -129,14 +123,14 @@ def search(question: str, vectorstore: dict):
 
     # Setup llm chain
     if vectorstore["model"] in openai_inference_models:
-        llm = ChatOpenAI(
+        llm=ChatOpenAI(
             openai_api_key=api_key,
             temperature=llm_temperature,
             verbose=True,
             model=vectorstore["model"]
         )
     elif vectorstore["model"] in local_models:
-        llm = LlamaCpp(
+        llm=LlamaCpp(
             verbose=True,
             model_path=vectorstore["path"],
             n_ctx=n_ctx,

@@ -25,12 +25,12 @@ This app is an LLM powered search engine that crawls a website's sitemap and per
 - [x] Add a config file
 - [x] Refactor to simplify code
 - [x] Add caching to improve performance
-- [ ] Enrich vector embeddings with additional metadata
+- [x] Enrich vector embeddings with additional metadata
 - [ ] Enrich vector embeddings with questions
 - [ ] Add support for [Figma](https://python.langchain.com/docs/integrations/document_loaders/figma)
 - [ ] Add support for [GitHub Issues](https://python.langchain.com/docs/integrations/document_loaders/github)
-- [ ] Add support for [Confluence](https://python.langchain.com/docs/integrations/document_loaders/confluence)
-- [ ] Add support for GCP hosted models
+- [x] Add support for [Confluence](https://python.langchain.com/docs/integrations/document_loaders/confluence)
+- [ ] Add support for GCP and Azure
 
 ## Installation
 
@@ -38,6 +38,9 @@ This app is an LLM powered search engine that crawls a website's sitemap and per
 
 Python 3.10.11 - 3.11.0 is recommened to run this app. [Download it here](https://www.python.org/downloads/)
 Several of the dependencies do not have wheels for Python 3.12, so you will need to install them from source if you choose to use Python 3.12.
+
+If you are using the Confluence document loader you will need to install the the Tesseract OCR engine. You can download it here: https://github.com/UB-Mannheim/tesseract/wiki
+After insalling, add the path to the tesseract executable to your PATH environment variable.
 
 #### Specific instructions for Windows installations
 

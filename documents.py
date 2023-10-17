@@ -1,71 +1,41 @@
 import os
 import ast
 import time
-import uuid
-import logging
+#import uuid
 import requests
-import datetime, pytz
 import streamlit as st
 import vectorstore as vs
+from utils import logger
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup as bs
+from langchain.document_loaders import ConfluenceLoader
+from langchain.document_loaders.figma import FigmaFileLoader
 from langchain.document_loaders import PyPDFLoader
-from langchain.document_loaders import TextLoader
 from langchain.document_loaders import WebBaseLoader
-from langchain.document_loaders.excel import UnstructuredExcelLoader
-from langchain.document_loaders.word_document import UnstructuredWordDocumentLoader
 from langchain.document_transformers import Html2TextTransformer
 
-logging.basicConfig(level=logging.INFO)
+metadata=[]
+documents=[]
 
-documents = []
-metadata = {}
-metadata['title'] = ''
-metadata['author'] = ''
-metadata['keywords'] = ''
-metadata['abstract'] = ''
-metadata['language'] = ''
-metadata['format'] = ''
-metadata['coverage'] = ''
-metadata['rights'] = ''
-metadata['relation'] = ''
-metadata['size'] = ''
-vectorstore = {}
-
-status_bar = st.empty()
-replaceable = st.empty()
-
-def logger(message, type):
-    global replaceable
-    if type == "warning":
-        logging.warning(message)
-        replaceable.warning(message)
-    elif type == "error":
-        logging.error(message)
-        replaceable.error(message)
-    else:
-        logging.info(message)
-    return None
+replaceable=st.empty()
 
 def load_documents(source, model, reindex):
     global replaceable
 
-    logging.info(f"Calling load_documents({source}, {model}, {reindex})")
-
-    documents = []
+    logger(f"Calling load_documents({source}, {model}, {reindex})", "info")
 
     # source is a URL, load documents from web
-    if source != '' and model != "model":
+    if source!= '' and model!= "model":
 
         # split url into domain, path, and query
         if "/" in source:
-            parsed = urlparse(source)
-            url = parsed.netloc
+            parsed=urlparse(source)
+            url=parsed.netloc
         else:
-            url = source
+            url=source
 
         # get vectorstore
-        vectorstore = vs.get_vectorstore(url, model)
+        vectorstore=vs.get_vectorstore(url, model)
         if vectorstore is None:
             logger(f"Error: vectorstore not found for {source}", "error")
             return None
@@ -81,44 +51,45 @@ def load_documents(source, model, reindex):
             logger(f"Reindexing vectorstore {vectorstore['path']}", "info")
 
         # configure our loading status widget
+        status_bar=st.empty()
         status_bar.progress(0, text=f"Loading sitemap")
 
-        app_dir = os.path.dirname(os.path.abspath(__file__))
+        app_dir=os.path.dirname(os.path.abspath(__file__))
 
         # check for local sitemap.xml override
-        sitemap_url = os.path.join(app_dir, 'sitemap.xml')
+        sitemap_url=os.path.join(app_dir, 'sitemap.xml')
         if os.path.exists(sitemap_url):
             with open(sitemap_url, 'r') as f:
-                sitemap_xml = f.read()
+                sitemap_xml=f.read()
 
         else:
             # Load the sitemap.xml file from the url
-            sitemap_url = f"https://{url}/sitemap.xml"
+            sitemap_url=f"https://{url}/sitemap.xml"
             logger(f"Fetching {sitemap_url}", "info")
             try:
-                response = requests.get(sitemap_url)
+                response=requests.get(sitemap_url)
             except Exception as e:
                 logger(f"Error fetching URL {sitemap_url}: {e}", "error")
                 return None
-            sitemap_xml = response.text
+            sitemap_xml=response.text
 
         # load sitemap links
-        soup = bs(sitemap_xml, "xml")
-        loc_tags = soup.find_all('loc')
+        soup=bs(sitemap_xml, "xml")
+        loc_tags=soup.find_all('loc')
         # convert bs resultset into a list of links
-        links = [tag.text for tag in loc_tags]
+        links=[tag.text for tag in loc_tags]
 
         # check for checkpoint register
         if os.path.exists(f".{url}.list"):
             with open(f".{url}.list", 'r') as f:
-                s_links = f.read()
+                s_links=f.read()
                 links=ast.literal_eval(s_links)
         else:
             # create checkpoint register
             with open(f".{url}.list", "w") as f:
                 f.write(str(links))        
 
-        num_links = len(links)
+        num_links=len(links)
         if num_links == 0:
             logger(f"Error: no links found in {sitemap_url}", "error")
             return None
@@ -127,20 +98,20 @@ def load_documents(source, model, reindex):
 
         # load documents from links
         for index, link in enumerate(links):
-            docs = []
-            loader = ''
+            docs=[]
+            loader=''
 
             # update progress
             status_bar.progress(index/num_links, text=f"Loading {index+1} of {num_links} pages: {link}")
 
-            logger(f"Fetching {link}", "info")
+            logger(f"Fetching headers for {link}", "info")
 
             # get page
-            content_type = None
+            content_type=None
             try:
-                response = requests.head(link, allow_redirects=True)
+                response=requests.head(link, allow_redirects=True)
                 response.raise_for_status()  # This will raise an HTTPError for bad responses (4xx and 5xx)
-                content_type = response.headers.get('content-type')
+                content_type=response.headers.get('content-type')
             except requests.exceptions.RequestException as e:
                 logger(f"skipping {link} due to Request failed: {e}", "warning")
                 continue
@@ -148,7 +119,7 @@ def load_documents(source, model, reindex):
                 logger(f"skipping {link} due to Request failed: {e}", "warning")
                 continue
 
-            header_template = {
+            header_template={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
                 "Accept-Language": "en-US,en;q=0.5",
@@ -165,23 +136,23 @@ def load_documents(source, model, reindex):
                 logger(f"Loading PDF {link}", "info")
 
                 try:
-                    loader = PyPDFLoader(
+                    loader=PyPDFLoader(
                         file_path=link,
                         headers=header_template
                     )
-                    pdf_docs = loader.load_and_split()
+                    pdf_docs=loader.load_and_split()
 
                     # the pdf loader replaces the link as the source with a local filename.
                     # this is to restore the original link as the docuemnt source (Issue: #3)
                     for i in enumerate(pdf_docs):
-                        pdf_docs[i[0]].metadata["source"] = response.url
+                        pdf_docs[i[0]].metadata["source"]=response.url
                 except Exception as e:
                     logger(f"Failed loading PDF {link}: {e}", "warning")
                 
                 docs.extend(pdf_docs)
 
             if 'text/html' in content_type:
-                loader = WebBaseLoader(
+                loader=WebBaseLoader(
                     link,
 #                        verify_ssl=False,
                     header_template=header_template
@@ -189,11 +160,11 @@ def load_documents(source, model, reindex):
 
                 logger(f"Loading HTML {link}", "info")
 
-                html2text = Html2TextTransformer()
+                html2text=Html2TextTransformer()
                 try:
-                    html_docs = loader.load_and_split()
+                    html_docs=loader.load_and_split()
                 except Exception as e:
-                    replaceable.warning(f"Error loading HTML {link}: {e}")
+                    logger(f"Error loading HTML {link}: {e}", "warning")
 
                 docs.extend(html2text.transform_documents(html_docs))
 
@@ -202,23 +173,21 @@ def load_documents(source, model, reindex):
                 logger(f"Skipping {link} due to unsupported content type: {content_type}", "warning")
                 continue
 
-
-
             # set some metadata
-#            metadata['identifier'] = uuid.uuid5(uuid.NAMESPACE_URL, url)
-            metadata['date'] = response.headers.get('date')
-            metadata['content_type'] = content_type
-            metadata['language'] = response.headers.get('content-language')
-            metadata['keywords'] = ''
-            metadata['abstract'] = ''
+#            metadata['identifier']=uuid.uuid5(uuid.NAMESPACE_URL, url)
+            metadata['date']=response.headers.get('date')
+            metadata['content_type']=content_type
+            metadata['language']=response.headers.get('content-language')
+            metadata['keywords']=''
+            metadata['abstract']=''
             for i in enumerate(docs):
-                docs[i[0]].metadata['date'] = response.headers.get('date')
-                docs[i[0]].metadata['content-type'] = content_type
-                docs[i[0]].metadata['language'] = response.headers.get('content-language')
-                docs[i[0]].metadata['keywords'] = ''
-                docs[i[0]].metadata['questions'] = ''
-                docs[i[0]].metadata['abstract'] = ''
-
+                docs[i[0]].metadata['date']=response.headers.get('last-modified')
+                docs[i[0]].metadata['content-type']=content_type
+                docs[i[0]].metadata['language']=response.headers.get('content-language')
+                docs[i[0]].metadata['keywords']=''
+                docs[i[0]].metadata['questions']=''
+                docs[i[0]].metadata['abstract']=''
+                docs[i[0]].metadata['size']=''
             documents.extend(docs)
 
             if len(documents) == 0:
@@ -234,7 +203,7 @@ def load_documents(source, model, reindex):
                 return None
 
             # update checkpoint register
-            register = links[index+1:]
+            register=links[index+1:]
             if len(register) == 0:
                 os.remove(f".{url}.list")
             else:
@@ -249,5 +218,72 @@ def load_documents(source, model, reindex):
         return vectorstore
     
     else:
-        replaceable.error(f"Error: Invalid or missing URL: {source}. Please enter a valid URL to search.")
+        logger(f"Error: Invalid or missing URL: {source}. Please enter a valid URL to search.", "error")
         return None
+
+def load_confluence_documents(source: str, model: str, space_key: str, username: str, api_key: str, include_attachments: bool=False, reindex: bool=False):
+    global replaceable
+
+    logger(f"Loading documents from Confluence space {source} with username {username} and api key {api_key}", "info")
+
+    # source is a URL, load documents from web
+    if source!= '' and model!= "model" and space_key!= '' and username!= '' and api_key!= '':
+
+        # split url into domain, path, and query
+        if "/" in source:
+            parsed=urlparse(source)
+            url=parsed.netloc
+        else:
+            url=source
+
+        # get vectorstore
+        vectorstore=vs.get_vectorstore(url, model)
+        if vectorstore is None:
+            logger(f"Error: vectorstore not found for {source}", "error")
+            return None
+
+        # check if vectorstore exists and return it if it does
+        if os.path.exists(vectorstore['path']) and not reindex:
+            try:
+                return vectorstore
+            except Exception as e:
+                logger(f"An error occured reading the vectorstore: {e}", "error")
+                return None
+        elif reindex:
+            logger(f"Reindexing vectorstore {vectorstore['path']}", "info")
+
+        try:
+            # create a docuement loader
+            loader=ConfluenceLoader(
+                url=source, username=username, api_key=api_key
+            )
+        except Exception as e:
+            logger(f"Error loading Confluence documents: {e}", "error")
+            return None
+
+        # load documents from confluence
+        try:
+            with st.spinner(f"Loading documents from Confluence space {space_key}..."):
+                documents=loader.load(space_key=space_key, include_attachments=include_attachments, limit=50)
+        except Exception as e:
+            logger(f"Error loading Confluence documents: {e}", "error")
+            return None
+
+        if len(documents) == 0:
+            logger(f"No documents found in Confluence space {space_key}", "warning")
+            return None
+
+        # save document embeddings
+        logger(f"Saving document embeddings", "info")
+        try:
+            vs.save(documents, vectorstore)
+        except Exception as e:
+            logger(f"Error saving document embedding: {e}", "error")
+            return None
+
+        # clar progress bar and messages
+        time.sleep(3)
+        replaceable.empty()
+
+        return vectorstore
+    return None
