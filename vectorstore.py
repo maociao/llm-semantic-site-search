@@ -23,7 +23,7 @@ def save(documents: dict, vectorstore: dict):
 
     # load cached embedding
     cached_embedder=CacheBackedEmbeddings.from_bytes_store(
-        vectorstore['embedding'], fs, namespace=vectorstore['embedding'].model
+        vectorstore['embedding'], fs, namespace=vectorstore['namespace']
     )
 
     vdb=FAISS.from_documents(documents, embedding=cached_embedder)
@@ -65,6 +65,7 @@ def get_vectorstore(url: str, model: str):
             model=openai_embedding_model
         )
         vectorstore['name']=f"{url}-{openai_embedding_model}.vdb"
+        vectorstore['namespace']=openai_embedding_model
 
     # local vectorstore
     elif model in local_models:
@@ -82,6 +83,7 @@ def get_vectorstore(url: str, model: str):
             n_gpu_layers=n_gpu_layers,
         )
         vectorstore['name']=f"{url}-{model}.vdb"
+        vectorstore['namespace'] = model
     else:
         logger(f"Error: {model} model does not exist", "error")
         return None

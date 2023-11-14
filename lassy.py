@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import documents as docs
 import vectorstore as vs

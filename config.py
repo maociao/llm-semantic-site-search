@@ -23,7 +23,9 @@ score_threshold=0.5
 ### LLaMa based models ###
 #
 # All local models must be downloaded and installed in the models folder
-local_models=['llama-2-7b.Q4_K_M','mistral-7b-v0.1.Q4_K_M']
+models_dir=os.path.join(os.path.dirname(__file__), "models")
+# create a list of all filenames from models dir
+local_models=[os.path.splitext(file)[0] for file in os.listdir(models_dir) if file.endswith(".gguf")]
 #
 # model context window
 n_ctx=4096
