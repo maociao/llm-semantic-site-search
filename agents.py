@@ -1,6 +1,19 @@
 from langchain.chains.question_answering import load_qa_chain
 from langchain import tools
 from langchain.agents.agent import Agent, AgentAction, AgentFinish
+from langchain.prompts import PromptTemplate
+from langchain.llms.openai import OpenAI
+from langchain.chains import LLMChain
+
+prompt_template = "What is a good name for a company that makes {product}?"
+
+llm = OpenAI(temperature=0)
+llm_chain = LLMChain(
+    llm=llm,
+    prompt=PromptTemplate.from_template(prompt_template)
+)
+
+llm_chain("colorful socks")
 
 output_schema = {
     "text": str, 
@@ -32,7 +45,7 @@ def parse(text):
         "summary": ""  
     }
 
-agent = Agent(tools, functions=[output_schema])
+#agent = Agent(tools, functions=[output_schema])
 
 def parse(output):
     if "output_schema" in output.function_call:

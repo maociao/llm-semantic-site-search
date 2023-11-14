@@ -179,7 +179,7 @@ def load_documents(source, model, reindex):
             # set some metadata
             for i in enumerate(docs):
                 docs[i[0]].metadata['identifier']=uuid.uuid5(uuid.NAMESPACE_URL, url)
-                docs[i[0]].metadata['date']=response.headers.get('last-modified')
+                docs[i[0]].metadata['last-modified']=response.headers.get('last-modified')
                 docs[i[0]].metadata['content-type']=content_type
                 docs[i[0]].metadata['language']=response.headers.get('content-language')
                 docs[i[0]].metadata['keywords']=agents.get_keywords(docs[i[0]])
