@@ -169,7 +169,6 @@ def main():
         query=form.text_area("What is it that you want to know?",
                     placeholder="What is this wiki about?"
         )
-        logger(f"Loading documents from Confluence space {url} with username {username} and api key {api_key}", "info")
 
         form.form_submit_button("Run", on_click=submit(url, query, model_name, space, username, api_key, reindex, attachments))
 

@@ -51,9 +51,6 @@ def get_vectorstore(url: str, model: str):
 
     logger(f"Creating vectorstore for {url} using {model}", "info")
 
-    # Set app home
-    app_home=os.path.dirname(os.path.abspath(__file__))
-
     # openai vectorstore
     if model in openai_inference_models:
 
@@ -72,7 +69,7 @@ def get_vectorstore(url: str, model: str):
     # local vectorstore
     elif model in local_models:
 
-        model_path=os.path.join(app_home, "models", model + ".gguf")
+        model_path=os.path.join(os.path.dirname(__file__), "models", model + ".gguf")
         # check if model_path exists
         if not os.path.exists(model_path):
             logger(f"Error: {model} model does not exist", "error")
@@ -90,7 +87,7 @@ def get_vectorstore(url: str, model: str):
         return None
 
     vectorstore['model']=model
-    vectorstore['path']=os.path.join(app_home, "data", vectorstore['name'])
+    vectorstore['path']=os.path.join(os.path.dirname(__file__), "data", vectorstore['name'])
     return vectorstore
 
 def search(question: str, vectorstore: dict):

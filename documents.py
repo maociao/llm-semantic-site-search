@@ -1,11 +1,12 @@
 import os
 import ast
 import time
-#import uuid
+import utils
+import uuid
+import agents
 import requests
 import streamlit as st
 import vectorstore as vs
-from utils import logger
 from urllib.parse import urlparse
 from bs4 import BeautifulSoup as bs
 from langchain.document_loaders import ConfluenceLoader
@@ -22,7 +23,7 @@ replaceable=st.empty()
 def load_documents(source, model, reindex):
     global replaceable
 
-    logger(f"Calling load_documents({source}, {model}, {reindex})", "info")
+    utils.logger(f"Calling load_documents({source}, {model}, {reindex})", "info")
 
     # source is a URL, load documents from web
     if source!= '' and model!= "model":
@@ -37,27 +38,27 @@ def load_documents(source, model, reindex):
         # get vectorstore
         vectorstore=vs.get_vectorstore(url, model)
         if vectorstore is None:
-            logger(f"Error: vectorstore not found for {source}", "error")
+            utils.logger(f"Error: vectorstore not found for {source}", "error")
             return None
+
+        docstore=os.path.join(os.path.dirname(__file__), "data", url+".pkl")
 
         # check if vectorstore exists and return it if it does
         if os.path.exists(vectorstore['path']) and not reindex:
             try:
                 return vectorstore
             except Exception as e:
-                logger(f"An error occured reading the vectorstore: {e}", "error")
+                utils.logger(f"An error occured reading the vectorstore: {e}", "error")
                 return None
         elif reindex:
-            logger(f"Reindexing vectorstore {vectorstore['path']}", "info")
+            utils.logger(f"Reindexing vectorstore {vectorstore['path']}", "info")
 
         # configure our loading status widget
         status_bar=st.empty()
         status_bar.progress(0, text=f"Loading sitemap")
 
-        app_dir=os.path.dirname(os.path.abspath(__file__))
-
         # check for local sitemap.xml override
-        sitemap_url=os.path.join(app_dir, 'sitemap.xml')
+        sitemap_url=os.path.join(os.path.dirname(__file__), 'sitemap.xml')
         if os.path.exists(sitemap_url):
             with open(sitemap_url, 'r') as f:
                 sitemap_xml=f.read()
@@ -65,11 +66,11 @@ def load_documents(source, model, reindex):
         else:
             # Load the sitemap.xml file from the url
             sitemap_url=f"https://{url}/sitemap.xml"
-            logger(f"Fetching {sitemap_url}", "info")
+            utils.logger(f"Fetching {sitemap_url}", "info")
             try:
                 response=requests.get(sitemap_url)
             except Exception as e:
-                logger(f"Error fetching URL {sitemap_url}: {e}", "error")
+                utils.logger(f"Error fetching URL {sitemap_url}: {e}", "error")
                 return None
             sitemap_xml=response.text
 
@@ -84,17 +85,19 @@ def load_documents(source, model, reindex):
             with open(f".{url}.list", 'r') as f:
                 s_links=f.read()
                 links=ast.literal_eval(s_links)
+            # load documents from docstore
+            documents=utils.read_pickle_lazy(docstore)
         else:
             # create checkpoint register
             with open(f".{url}.list", "w") as f:
-                f.write(str(links))        
+                f.write(str(links))
 
         num_links=len(links)
         if num_links == 0:
-            logger(f"Error: no links found in {sitemap_url}", "error")
+            utils.logger(f"Error: no links found in {sitemap_url}", "error")
             return None
 
-        logger(f"Found {num_links} links in {sitemap_url}", "info")
+        utils.logger(f"Found {num_links} links in {sitemap_url}", "info")
 
         # load documents from links
         for index, link in enumerate(links):
@@ -104,7 +107,7 @@ def load_documents(source, model, reindex):
             # update progress
             status_bar.progress(index/num_links, text=f"Loading {index+1} of {num_links} pages: {link}")
 
-            logger(f"Fetching headers for {link}", "info")
+            utils.logger(f"Fetching headers for {link}", "info")
 
             # get page
             content_type=None
@@ -113,10 +116,10 @@ def load_documents(source, model, reindex):
                 response.raise_for_status()  # This will raise an HTTPError for bad responses (4xx and 5xx)
                 content_type=response.headers.get('content-type')
             except requests.exceptions.RequestException as e:
-                logger(f"skipping {link} due to Request failed: {e}", "warning")
+                utils.logger(f"skipping {link} due to Request failed: {e}", "warning")
                 continue
             except requests.exceptions as e:
-                logger(f"skipping {link} due to Request failed: {e}", "warning")
+                utils.logger(f"skipping {link} due to Request failed: {e}", "warning")
                 continue
 
             header_template={
@@ -128,12 +131,12 @@ def load_documents(source, model, reindex):
 
             # check if content_type is None before checking for substrings
             if content_type is None:
-                logger(f"Unable to determine content type for {link}", "warning")
+                utils.logger(f"Unable to determine content type for {link}", "warning")
                 continue
 
             # Load and parse document based on document type
             if 'application/pdf' in content_type:
-                logger(f"Loading PDF {link}", "info")
+                utils.logger(f"Loading PDF {link}", "info")
 
                 try:
                     loader=PyPDFLoader(
@@ -147,7 +150,7 @@ def load_documents(source, model, reindex):
                     for i in enumerate(pdf_docs):
                         pdf_docs[i[0]].metadata["source"]=response.url
                 except Exception as e:
-                    logger(f"Failed loading PDF {link}: {e}", "warning")
+                    utils.logger(f"Failed loading PDF {link}: {e}", "warning")
                 
                 docs.extend(pdf_docs)
 
@@ -158,48 +161,51 @@ def load_documents(source, model, reindex):
                     header_template=header_template
                 )
 
-                logger(f"Loading HTML {link}", "info")
+                utils.logger(f"Loading HTML {link}", "info")
 
                 html2text=Html2TextTransformer()
                 try:
                     html_docs=loader.load_and_split()
                 except Exception as e:
-                    logger(f"Error loading HTML {link}: {e}", "warning")
+                    utils.logger(f"Error loading HTML {link}: {e}", "warning")
 
                 docs.extend(html2text.transform_documents(html_docs))
 
             # unsupported content type
             if loader == '':
-                logger(f"Skipping {link} due to unsupported content type: {content_type}", "warning")
+                utils.logger(f"Skipping {link} due to unsupported content type: {content_type}", "warning")
                 continue
 
             # set some metadata
-#            metadata['identifier']=uuid.uuid5(uuid.NAMESPACE_URL, url)
-            metadata['date']=response.headers.get('date')
-            metadata['content_type']=content_type
-            metadata['language']=response.headers.get('content-language')
-            metadata['keywords']=''
-            metadata['abstract']=''
             for i in enumerate(docs):
+                docs[i[0]].metadata['identifier']=uuid.uuid5(uuid.NAMESPACE_URL, url)
                 docs[i[0]].metadata['date']=response.headers.get('last-modified')
                 docs[i[0]].metadata['content-type']=content_type
                 docs[i[0]].metadata['language']=response.headers.get('content-language')
-                docs[i[0]].metadata['keywords']=''
-                docs[i[0]].metadata['questions']=''
-                docs[i[0]].metadata['abstract']=''
+                docs[i[0]].metadata['keywords']=agents.get_keywords(docs[i[0]])
+                docs[i[0]].metadata['questions']=agents.get_questions(docs[i[0]])
+                docs[i[0]].metadata['abstract']=agents.get_abstract(docs[i[0]])
                 docs[i[0]].metadata['size']=''
             documents.extend(docs)
 
             if len(documents) == 0:
-                logger(f"No documents found in {sitemap_url}", "warning")
+                utils.logger(f"No documents found in {sitemap_url}", "warning")
+                return None
+
+            # save documents
+            utils.logger(f"Saving documents", "info")
+            try:
+                utils.write_pickle_lazy(documents, docstore)
+            except Exception as e:
+                utils.logger(f"Error saving documents: {e}", "error")
                 return None
 
             # save document embeddings
-            logger(f"Saving document embeddings", "info")
+            utils.logger(f"Saving document embeddings", "info")
             try:
                 vs.save(documents, vectorstore)
             except Exception as e:
-                logger(f"Error saving document embedding: {e}", "error")
+                utils.logger(f"Error saving document embedding: {e}", "error")
                 return None
 
             # update checkpoint register
@@ -218,13 +224,13 @@ def load_documents(source, model, reindex):
         return vectorstore
     
     else:
-        logger(f"Error: Invalid or missing URL: {source}. Please enter a valid URL to search.", "error")
+        utils.logger(f"Error: Invalid or missing URL: {source}. Please enter a valid URL to search.", "error")
         return None
 
 def load_confluence_documents(source: str, model: str, space_key: str, username: str, api_key: str, include_attachments: bool=False, reindex: bool=False):
     global replaceable
 
-    logger(f"Loading documents from Confluence space {source} with username {username} and api key {api_key}", "info")
+    utils.logger(f"Loading documents from Confluence space: {source}", "info")
 
     # source is a URL, load documents from web
     if source!= '' and model!= "model" and space_key!= '' and username!= '' and api_key!= '':
@@ -237,20 +243,19 @@ def load_confluence_documents(source: str, model: str, space_key: str, username:
             url=source
 
         # get vectorstore
-        vectorstore=vs.get_vectorstore(url, model)
+        vectorstore=vs.get_vectorstore(url+"-"+space_key, model)
         if vectorstore is None:
-            logger(f"Error: vectorstore not found for {source}", "error")
+            utils.logger(f"Error: vectorstore not found for {source}", "error")
             return None
 
+        docstore=os.path.join(os.path.dirname(__file__), "data", url+".pkl")
+ 
         # check if vectorstore exists and return it if it does
         if os.path.exists(vectorstore['path']) and not reindex:
-            try:
-                return vectorstore
-            except Exception as e:
-                logger(f"An error occured reading the vectorstore: {e}", "error")
-                return None
+            utils.logger(f"Vectorstore exists for {source}. Loading...", "info")
+            return vectorstore
         elif reindex:
-            logger(f"Reindexing vectorstore {vectorstore['path']}", "info")
+            utils.logger(f"Reindexing vectorstore {vectorstore['path']}", "info")
 
         try:
             # create a docuement loader
@@ -258,7 +263,7 @@ def load_confluence_documents(source: str, model: str, space_key: str, username:
                 url=source, username=username, api_key=api_key
             )
         except Exception as e:
-            logger(f"Error loading Confluence documents: {e}", "error")
+            utils.logger(f"Error loading Confluence documents: {e}", "error")
             return None
 
         # load documents from confluence
@@ -266,19 +271,27 @@ def load_confluence_documents(source: str, model: str, space_key: str, username:
             with st.spinner(f"Loading documents from Confluence space {space_key}..."):
                 documents=loader.load(space_key=space_key, include_attachments=include_attachments, limit=50)
         except Exception as e:
-            logger(f"Error loading Confluence documents: {e}", "error")
+            utils.logger(f"Error loading Confluence documents: {e}", "error")
             return None
 
         if len(documents) == 0:
-            logger(f"No documents found in Confluence space {space_key}", "warning")
+            utils.logger(f"No documents found in Confluence space {space_key}", "warning")
+            return None
+
+        # save documents
+        utils.logger(f"Saving documents", "info")
+        try:
+            utils.write_pickle(documents, docstore)
+        except Exception as e:
+            utils.logger(f"Error saving documents: {e}", "error")
             return None
 
         # save document embeddings
-        logger(f"Saving document embeddings", "info")
+        utils.logger(f"Saving document embeddings", "info")
         try:
             vs.save(documents, vectorstore)
         except Exception as e:
-            logger(f"Error saving document embedding: {e}", "error")
+            utils.logger(f"Error saving document embedding: {e}", "error")
             return None
 
         # clar progress bar and messages

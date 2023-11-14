@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import logging
 
@@ -19,19 +20,23 @@ def logger(message, type):
 
 import pickle
 
+
 # save data
-def write_pickle(data, file):
+def write_pickle(data, docstore):
+    file=os.path.join(os.path.dirname(__file__), "data", docstore)
     with open(file, 'wb') as f:
         pickle.dump(data, f)
 
 # lazy save data
-def write_pickle_lazy(data, file):
+def write_pickle_lazy(data, docstore):
+    file=os.path.join(os.path.dirname(__file__), "data", docstore)
     with open(file, 'wb') as f:
         for item in data:
             pickle.dump(item, f)
 
 # load data
-def read_pickle(file):
+def read_pickle(docstore):
+    file=os.path.join(os.path.dirname(__file__), "data", docstore)
     with open(file, 'rb') as f:
         return pickle.load(f)
 
